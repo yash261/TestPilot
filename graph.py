@@ -217,6 +217,8 @@ class RepoMap:
                     object_node = parent.child_by_field_name("object")
                     if object_node:
                         node_text = f"{object_node.text.decode('utf-8')}.{node_text}"
+            print(node.start_point[0])
+            print(node.end_point[0])
 
             result = Tag(
                 rel_fname=rel_fname,

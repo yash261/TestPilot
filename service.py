@@ -537,11 +537,21 @@ class InferenceService:
                 )
                 print("Graph stored in Neo4j successfully.")
 
-    def project_setup(self,repo_dir: str):
+    def project_setup(self,repo_dir: str,cleanup: bool=False):
+        if(cleanup):
+            self.cleanup_neo4j()
         map=RepoMap(root=repo_dir,verbose=True,main_model=SimpleTokenCounter(),io=SimpleIO(),)
         nx_graph = map.create_graph(repo_dir)
-        self.store_to_neo4j(nx_graph)
-
+        # visualize_graph(nx_graph)
+        self.store_graph_to_neo4j(nx_graph)
+    
+    def cleanup_neo4j(self):
+        print("This is a help function")
+        with self.driver.session() as session:
+            session.run("MATCH (n) DETACH DELETE n;")
+        self.driver.close()
+        print("Neo4j graph cleaned up successfully.")
+    
     def create_vector_index(self):
         with self.driver.session() as session:
             session.run(
@@ -563,6 +573,7 @@ class InferenceService:
         )
         self.log_graph_stats(repo_id)
         self.create_vector_index()
+
 
     def query_vector_index(
         self,
