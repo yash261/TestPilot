@@ -1,4 +1,5 @@
 import json
+import re
 from langchain.agents import AgentType, AgentExecutor, create_react_agent
 from langchain.tools import BaseTool
 from langchain.prompts import PromptTemplate
@@ -25,7 +26,8 @@ def KnowledgeGraphQueryTool(input_str: str) -> List[Dict]:
     "node_ids" is an optional field
     """
     from service import InferenceService
-
+    input_str = re.search(r'\{.*\}', input_str).group(0)
+    print(input_str)
     input_data = json.loads(input_str) if isinstance(input_str, str) else input_str
     if isinstance(input_data, dict):
         queries = input_data.get("queries", [])

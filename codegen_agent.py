@@ -60,4 +60,4 @@ def create_knowledge_graph_agent(llm):
 
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 knowledge_agent = create_knowledge_graph_agent(llm)
-response = knowledge_agent.invoke({"input": "Give me code for fetch_graph function"})
+response = knowledge_agent.invoke({"input": "Explain InferenceService function and give me the code"})

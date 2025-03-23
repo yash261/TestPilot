@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Any, Dict
 from langchain.tools import tool
 from langchain_core.tools import StructuredTool
@@ -19,7 +20,7 @@ def GetCodeFromNodeIdTool(node_id: str,project_id: str="default") -> Dict[str, A
         The input should be a string which is the id of node to retrieve code for.
         Returns dictionary containing node code, docstring, and file location details.
     """
-
+    node_id = re.sub(r'^\s*`?|`\s*$|\s+', '', node_id)
     node_data = _get_node_data(project_id, node_id)
     return _process_result(node_data, node_id)
 
@@ -39,7 +40,7 @@ def _process_result(
     start_line = node_data["start_line"]
     end_line = node_data["end_line"]
     relative_file_path = _get_relative_file_path(file_path)
-    code_content = node_data.get("text", None)
+    code_content = node_data.get("code", None)
 
     docstring = None
     if node_data.get("docstring", None):
