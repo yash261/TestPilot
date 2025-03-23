@@ -4,7 +4,7 @@ import os
 import warnings
 from collections import Counter, defaultdict, namedtuple
 from pathlib import Path
-
+import javalang
 import networkx as nx
 from grep_ast import TreeContext, filename_to_lang
 from pygments.lexers import guess_lexer_for_filename
@@ -131,6 +131,47 @@ class RepoMap:
 
         return data
 
+
+    def extract_code_from_node(self,node, source_lines):
+        start_line = node.position.line - 1 if node.position else 0
+        descendants = self.get_all_descendants(node)
+
+        # Find the next sibling (next method or class member)
+        next_start_line = None
+        for i, line in enumerate(source_lines[start_line:], start=start_line):
+            if "{" in line:  # Detect opening brace
+                brace_count = 1
+                for j in range(i + 1, len(source_lines)):
+                    brace_count += source_lines[j].count("{")
+                    brace_count -= source_lines[j].count("}")
+                    if brace_count == 0:  # Found matching closing brace
+                        next_start_line = j + 1  # Include this line
+                        break
+                break
+
+        # If no next sibling was found, assume method extends to end of file/class
+        end_line = next_start_line if next_start_line else len(source_lines)
+
+        return "\n".join(source_lines[start_line:end_line]).strip()
+    
+    def get_all_descendants(self,node):
+        """Recursively collect all descendant nodes of the given node."""
+        descendants = []
+        def traverse(n):
+            if hasattr(n, 'children'):
+                for child in n.children:
+                    if child:
+                        if isinstance(child, (list, tuple)):
+                            for subchild in child:
+                                if subchild:
+                                    descendants.append(subchild)
+                                    traverse(subchild)
+                        else:
+                            descendants.append(child)
+                            traverse(child)
+        traverse(node)
+        return descendants
+
     def get_tags_raw(self, fname, rel_fname):
         lang = filename_to_lang(fname)
         if not lang:
@@ -154,14 +195,11 @@ class RepoMap:
         captures = query.captures(tree.root_node)
         captures = list(captures)
         saw = set()
-
         for node, tag in captures:
             node_text = node.text.decode("utf-8")
-
             if tag.startswith("name.definition."):
                 kind = "def"
                 type = tag.split(".")[-1]
-
             elif tag.startswith("name.reference."):
                 kind = "ref"
                 type = tag.split(".")[-1]
@@ -607,6 +645,34 @@ class RepoMap:
 
                 current_class = None
                 current_method = None
+                lang = filename_to_lang(file_path)
+                # print(lang)
+                code_text = {}
+                if(lang=="java"):
+                    code = self.io.read_text(file_path)
+                    # print(code)
+                    source_lines = code.splitlines()
+                    
+                    tree1 = javalang.parse.parse(code)
+                    for path, node in tree1:
+                        if isinstance(node, javalang.tree.ClassDeclaration):
+                            # print(node.name)
+                            class_code = self.extract_code_from_node(node, source_lines)
+                            code_text[node.name] = class_code
+                            # print(class_code)
+                            # print("----------------------------------------")
+
+                            for method in node.methods:
+                                method_name = f"{node.name}.{method.name}"
+                                method_code = self.extract_code_from_node(method, source_lines)
+                                code_text[method_name] = method_code 
+                                # print(method_name)
+                                # print(method_code)
+                    #         print("----------------------------------------")
+                    #     print()
+                    # print("'''''''''''")
+
+                # print(code_text)
 
                 # Process all tags in file
                 for tag in self.get_tags(file_path, rel_path):
@@ -630,7 +696,13 @@ class RepoMap:
                             node_name = f"{rel_path}:{current_class}.{tag.name}"
                         else:
                             node_name = f"{rel_path}:{tag.name}"
+                        text_code = ""
+                        if node_type == "CLASS":
+                            text_code = code_text.get(tag.name, "")
+                        elif node_type == "FUNCTION":
+                            text_code = code_text.get(f"{current_class}.{tag.name}", "")
 
+                        # print(text_code)
                         # Add node
                         if not G.has_node(node_name):
                             G.add_node(
@@ -639,6 +711,7 @@ class RepoMap:
                                 line=tag.line,
                                 end_line=tag.end_line,
                                 type=node_type,
+                                text= text_code,
                                 name=tag.name,
                                 class_name=current_class,
                             )
