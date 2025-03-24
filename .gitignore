@@ -1,3 +1,5 @@
 .env
 __pycache__/
 myenv
+
+task-app/test-generator/node_modules/*
