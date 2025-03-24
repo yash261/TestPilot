@@ -12,8 +12,8 @@ from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 import os
 import instructor
-from graph import RepoMap
-from utils import SimpleTokenCounter, SimpleIO, visualize_graph, generate_node_id
+from Agents.CodeRagAgent.graph import RepoMap
+from Agents.CodeRagAgent.utils import SimpleTokenCounter, SimpleIO, visualize_graph, generate_node_id
 load_dotenv()
 
 genai.configure(api_key=os.environ["GOOGLE_API_KEY"])

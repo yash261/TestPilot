@@ -1,7 +1,0 @@
-pinecone
-langchain-community
-langchain
-pypd
-langchain-google-genai
-PyMuPDF 
-spacy

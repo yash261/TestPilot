@@ -25,7 +25,7 @@ def KnowledgeGraphQueryTool(input_str: str) -> List[Dict]:
 
     "node_ids" is an optional field
     """
-    from service import InferenceService
+    from Agents.CodeRagAgent.service import InferenceService
     input_str = re.search(r'\{.*\}', input_str).group(0)
     print(input_str)
     input_data = json.loads(input_str) if isinstance(input_str, str) else input_str

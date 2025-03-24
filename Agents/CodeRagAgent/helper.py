@@ -1,27 +1,8 @@
-import logging
 import os
 import shutil
 import tarfile
-from typing import Any, Tuple
-
 import requests
 from git import Repo
-
-# from app.modules.code_provider.code_provider_service import CodeProviderService
-# from app.modules.parsing.graph_construction.parsing_schema import RepoDetails
-# from app.modules.projects.projects_schema import ProjectStatusEnum
-# from app.modules.projects.projects_service import ProjectService
-
-logger = logging.getLogger(__name__)
-
-
-class ParsingServiceError(Exception):
-    """Base exception class for ParsingService errors."""
-
-
-class ParsingFailedError(ParsingServiceError):
-    """Raised when a parsing fails."""
-
 
 class ParseHelper:
     def __init__(self):
@@ -115,7 +96,7 @@ class ParseHelper:
             response = requests.get(tarball_url, stream=True, headers=headers)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching tarball: {e}")
+            print(f"Error fetching tarball: {e}")
             return e
         tarball_path = os.path.join(
             target_dir,
@@ -149,16 +130,16 @@ class ParseHelper:
                                 os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                                 shutil.copy2(file_path, dest_path)
                             except (shutil.Error, OSError) as e:
-                                logger.error(f"Error copying file {file_path}: {e}")
+                                print(f"Error copying file {file_path}: {e}")
                 # Remove the temporary directory
                 try:
                     shutil.rmtree(temp_dir)
                 except OSError as e:
-                    logger.error(f"Error removing temporary directory: {e}")
+                    print(f"Error removing temporary directory: {e}")
                     pass
 
         except (IOError, tarfile.TarError, shutil.Error) as e:
-            logger.error(f"Error handling tarball: {e}")
+            print(f"Error handling tarball: {e}")
             return e
         finally:
             if os.path.exists(tarball_path):
@@ -246,10 +227,10 @@ class ParseHelper:
                         FileNotFoundError,
                         PermissionError,
                     ) as e:
-                        logger.warning(f"Error reading file {file_path}: {e}")
+                        print(f"Error reading file {file_path}: {e}")
                         continue
         except (TypeError, FileNotFoundError, PermissionError) as e:
-            logger.error(f"Error accessing directory '{repo_dir}': {e}")
+            print(f"Error accessing directory '{repo_dir}': {e}")
 
         # Determine the predominant language based on counts
         predominant_language = max(lang_count, key=lang_count.get)
@@ -359,7 +340,7 @@ class ParseHelper:
 
         project = await self.project_manager.get_project_from_db_by_id(project_id)
         if not project:
-            logger.error(f"Project with ID {project_id} not found")
+            print(f"Project with ID {project_id} not found")
             return False
 
         current_commit_id = project.get("commit_id")
@@ -367,7 +348,7 @@ class ParseHelper:
         branch_name = project.get("branch_name")
 
         if not repo_name or not branch_name:
-            logger.error(
+            print(
                 f"Repository name or branch name not found for project ID {project_id}"
             )
             return False
@@ -382,7 +363,7 @@ class ParseHelper:
             latest_commit_id = branch.commit.sha
 
             is_up_to_date = current_commit_id == latest_commit_id
-            logger.info(
+            print(
                 f"""Project {project_id} commit status for branch {branch_name}: {'Up to date' if is_up_to_date else 'Outdated'}"
             Current commit ID: {current_commit_id}
             Latest commit ID: {latest_commit_id}"""
@@ -390,7 +371,7 @@ class ParseHelper:
 
             return is_up_to_date
         except Exception as e:
-            logger.error(
+            print(
                 f"Error fetching latest commit for {repo_name}/{branch_name}: {e}"
             )
             return False

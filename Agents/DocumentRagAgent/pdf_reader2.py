@@ -154,13 +154,3 @@ def get_chunks(pdf_path:str):
     document_text = extract_text_from_pdf(pdf_path)
     chunks = chunk_document_hybrid(document_text, max_semantic_size=1000)
     return chunks
-
-
-# Test with your document
-if __name__ == "__main__":
-    pdf_path = "Data/Demo.pdf"
-    document_text = extract_text_from_pdf(pdf_path)
-    
-    chunks = chunk_document_hybrid(document_text, max_semantic_size=1000)
-    print(f"\nTotal chunks generated: {len(chunks)}")
-    print_chunks(chunks)

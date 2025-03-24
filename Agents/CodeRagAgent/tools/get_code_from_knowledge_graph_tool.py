@@ -7,7 +7,7 @@ from langchain_core.tools import StructuredTool
 from neo4j import GraphDatabase
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from service import InferenceService
+from Agents.CodeRagAgent.service import InferenceService
 
 class GetCodeFromNodeIdInput(BaseModel):
     project_id: str = Field(description="The repository ID, this is a UUID")
