@@ -1,4 +1,4 @@
-// generate-tests.js
+// test-generator/generate-tests.js
 const fs = require('fs').promises;
 const path = require('path');
 const { parse } = require('@babel/parser');
@@ -7,6 +7,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { pipeline } = require('@xenova/transformers');
 const dotenv = require('dotenv');
 const pdfParse = require('pdf-parse');
+const minimist = require('minimist');
 
 // Load environment variables from .env file
 const envConfig = dotenv.config();
@@ -18,15 +19,30 @@ if (!process.env.GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY is not defined in .env file');
 }
 
+// Parse command-line arguments
+const args = minimist(process.argv.slice(2));
+const COMPONENTS_DIR = args.components ? path.resolve(args.components) : path.resolve(__dirname, '../frontend/src/components');
+const DESIGN_PDF_PATH = args.design ? path.resolve(args.design) : path.resolve(__dirname, '../design/design.pdf');
+const CACHE_FILE = path.resolve(__dirname, './cache.json');
+const FEATURES_DIR = path.resolve(__dirname, '../tests/features');
+
+// Validate provided paths
+async function validatePaths() {
+  try {
+    await fs.access(COMPONENTS_DIR);
+    await fs.access(DESIGN_PDF_PATH);
+  } catch (error) {
+    console.error('Error: Invalid path provided.');
+    console.error(`Components directory: ${COMPONENTS_DIR}`);
+    console.error(`Design PDF: ${DESIGN_PDF_PATH}`);
+    console.error('Usage: node generate-tests.js --components <path> --design <pdf-path>');
+    process.exit(1);
+  }
+}
+
 // Initialize Gemini API with gemini-2.0-flash
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-// Constants
-const CACHE_FILE = './cache.json';
-const COMPONENTS_DIR = '../frontend/src/components/';
-const DESIGN_PDF_PATH = '../design/design-task-management.pdf';
-const FEATURES_DIR = '../tests/features/';
 
 // Initialize embedding model
 let embedder;
@@ -46,7 +62,7 @@ async function generateEmbedding(text) {
   return Array.from(result.data);
 }
 
-// Cosine similarity function (synchronous, assumes inputs are resolved arrays)
+// Cosine similarity function
 function cosineSimilarity(vecA, vecB) {
   if (!vecA || !vecB || vecA.length !== vecB.length) {
     console.warn('Invalid vectors for cosine similarity:', vecA, vecB);
@@ -132,6 +148,52 @@ function cleanTestCode(testCode) {
   cleaned = cleaned.replace(/\n?```\s*$/, '');
   cleaned = cleaned.replace(/```/g, '');
   return cleaned.trim();
+}
+
+// Split Gherkin text into separate feature files
+function splitGherkinIntoFeatures(gherkinText, componentName) {
+  const lines = gherkinText.split('\n');
+  const features = [];
+  let currentFeature = { header: [], scenarios: [] };
+  let currentScenario = null;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (trimmedLine.startsWith('Feature:')) {
+      if (currentFeature.scenarios.length > 0) {
+        features.push(currentFeature);
+        currentFeature = { header: [], scenarios: [] };
+      }
+      currentFeature.header.push(line);
+    } else if (trimmedLine.startsWith('Scenario:')) {
+      if (currentScenario) {
+        currentFeature.scenarios.push(currentScenario);
+      }
+      currentScenario = [line];
+    } else if (currentScenario) {
+      currentScenario.push(line);
+    } else {
+      currentFeature.header.push(line);
+    }
+  }
+  if (currentScenario) {
+    currentFeature.scenarios.push(currentScenario);
+  }
+  if (currentFeature.header.length > 0 || currentFeature.scenarios.length > 0) {
+    features.push(currentFeature);
+  }
+
+  const featureFiles = [];
+  features.forEach(feature => {
+    feature.scenarios.forEach((scenario, index) => {
+      const scenarioName = scenario[0].trim().replace('Scenario:', '').trim().toLowerCase().replace(/\s+/g, '-');
+      const fileName = `${componentName.toLowerCase()}-${scenarioName}.feature`;
+      const content = [...feature.header, '', ...scenario].join('\n');
+      featureFiles.push({ fileName, content });
+    });
+  });
+
+  return featureFiles;
 }
 
 // Chunk PDF text into sections
@@ -226,13 +288,13 @@ async function extractEntitiesAndRelations(chunk) {
     }
   }
 
-  const credentialsMatch = chunk.match(/$$ "([^"]+)",\s*"([^"]+)" $$/);
+  const credentialsMatch = chunk.match(/username "([^"]+)" and password "([^"]+)"/);
   if (credentialsMatch && entities.components.length > 0) {
     entities.credentials = { username: credentialsMatch[1], password: credentialsMatch[2] };
   }
 
-  const baseUrlMatch = chunk.match(/http:\/\/localhost:[0-9]+/);
-  if (baseUrlMatch) entities.baseUrl = baseUrlMatch[0];
+  const baseUrlMatch = chunk.match(/Base URL: (http:\/\/localhost:[0-9]+)/i);
+  if (baseUrlMatch) entities.baseUrl = baseUrlMatch[1];
 
   return { entities, relations };
 }
@@ -337,7 +399,7 @@ async function buildCodeKnowledgeGraph(filePath, code, componentName, cache) {
 
   traverse(ast, {
     JSXAttribute(path) {
-      if (path.node.name.name === 'data-testid') {
+      if (path.node.name.name === 'id') {
         const testId = path.node.value.value;
         graph.nodes[testId] = { type: 'element' };
         graph.edges.push({ from: componentName, to: testId, relation: 'contains' });
@@ -471,20 +533,27 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
     : 'No similar previous code or scenarios found.';
 
   const prompt = `
-    Generate a BDD test case in Gherkin format (using Feature, Scenario, Given, When, Then) for the provided React component. The test must:
+    Generate multiple BDD test cases in Gherkin format (using Feature, Scenario, Given, When, Then) for the provided React component. The tests must:
     - Describe the behavior of the component in a human-readable way, focusing on user interactions and expected outcomes.
-    - Be part of a test suite starting from the landing page identified in the context.
+    - Include at least two positive scenarios (successful cases) and two negative scenarios (failure cases) under a single Feature.
+    - Use the complete URL in Given steps by combining the base URL and route from the context (e.g., if Base URL is "http://localhost:3000" and Route is "/dashboard", use "I am on the dashboard page at http://localhost:3000/dashboard").
+    - If the application has login/signup functionality (check context for 'Login' or 'Signup' components):
+      - For components other than 'Login' and 'Signup', include explicit login steps before proceeding:
+        - Start with "Given I am on the login page at <login-url>" (use Base URL + "/").
+        - Follow with "And I enter '<username>' into the username field" and "And I enter '<password>' into the password field" using credentials from the context if provided, otherwise default to "user" and "pass".
+        - Include "And I click the 'Login' button" to submit the login.
+        - Then proceed to "And I am on the <component> page at <component-url>".
     - If the component is the landing page:
-      - Include a scenario for logging in if credentials are provided, referencing UI elements by their data-testid attributes (e.g., username, password, submit).
-      - Verify successful login by checking for a success message.
+      - Include positive scenarios like successful login with valid credentials and negative scenarios like login with invalid credentials.
+      - Reference UI elements generically (e.g., "username field", "password field", "Login button").
+      - Verify outcomes (e.g., redirection to another page or error message).
     - If the component is not the landing page:
-      - Assume the user is logged in if required by the context.
-      - Include a scenario for navigating to the component's route using a navigation button's data-testid from the context.
-      - Test core functionality (e.g., viewing a list, submitting a form) with positive cases.
-    - Use provided context for details (e.g., base URL, routes, APIs, credentials, navigation IDs).
-    - Use data-testid attributes for UI elements (e.g., '[data-testid="submit"]').
-    - Do not include implementation details or automation code (e.g., Playwright commands).
-    - Do not include markdown fences (e.g., \`\`\`gherkin)—output raw Gherkin text only.
+      - Include positive scenarios (e.g., successful form submission, navigation) and negative scenarios (e.g., invalid input, insufficient data).
+      - Test core functionality with realistic examples based on the context and code.
+    - Use provided context for details (e.g., base URL, routes, APIs, credentials).
+    - Do not use specific attributes like data-testid or id for UI elements; keep descriptions generic.
+    - Do not include implementation details or automation code.
+    - Do not include markdown fences—output raw Gherkin text only.
     - Ensure proper indentation (2 spaces) and consistent Gherkin syntax.
 
     ${contextSection}
@@ -498,7 +567,7 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
     \`\`\`
   `;
 
-  console.log(`Generating BDD test for ${componentName} with Gemini`);
+  console.log(`Generating BDD tests for ${componentName} with Gemini`);
   const result = await model.generateContent(prompt);
   const rawTestCode = result.response.text();
   const testCode = cleanTestCode(rawTestCode);
@@ -509,7 +578,7 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
   return testCode;
 }
 
-// Generate BDD test cases for all components
+// Generate BDD test cases for all components and split into separate feature files
 async function generateTestsForComponents(componentFiles, designGraph, cache) {
   const orderedFiles = determineTestOrder(componentFiles, designGraph);
   console.log('Ordered files before processing:', orderedFiles);
@@ -551,9 +620,13 @@ async function generateTestsForComponents(componentFiles, designGraph, cache) {
       throw new Error(`Generated test for ${componentName} is invalid or empty`);
     }
 
-    const featureFilePath = path.join(FEATURES_DIR, `${componentName.toLowerCase()}.feature`);
-    await fs.writeFile(featureFilePath, generatedTest);
-    console.log(`Generated BDD test saved at ${featureFilePath}`);
+    // Split the Gherkin text into separate feature files
+    const featureFiles = splitGherkinIntoFeatures(generatedTest, componentName);
+    for (const { fileName, content } of featureFiles) {
+      const featureFilePath = path.join(FEATURES_DIR, fileName);
+      await fs.writeFile(featureFilePath, content);
+      console.log(`Generated BDD test saved at ${featureFilePath}`);
+    }
   }
 
   await saveCache(cache);
@@ -562,6 +635,9 @@ async function generateTestsForComponents(componentFiles, designGraph, cache) {
 // Main function to generate tests
 async function generateTests() {
   try {
+    console.log('Validating provided paths...');
+    await validatePaths();
+
     console.log('Initializing models...');
     await initializeModels();
 
