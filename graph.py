@@ -617,7 +617,7 @@ class RepoMap:
         defines = defaultdict(set)
         references = defaultdict(set)
         seen_relationships = set()
-
+        repo_dir = os.path.join(repo_dir, "Backend") 
         for root, dirs, files in os.walk(repo_dir):
             if any(part.startswith(".") for part in root.split(os.sep)):
                 continue
