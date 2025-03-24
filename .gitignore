@@ -1,5 +1,11 @@
 .env
+.vscode/
 __pycache__/
 myenv
 
-task-app/test-generator/node_modules/*
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

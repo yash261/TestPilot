@@ -1,7 +1,6 @@
 import logging
 import math
 import os
-import warnings
 from collections import Counter, defaultdict, namedtuple
 from pathlib import Path
 import javalang
@@ -12,9 +11,7 @@ from pygments.token import Token
 from pygments.util import ClassNotFound
 from tqdm import tqdm
 from tree_sitter_languages import get_language, get_parser
-from helper import ParseHelper
-# tree_sitter is throwing a FutureWarning
-warnings.simplefilter("ignore", category=FutureWarning)
+from Agents.CodeRagAgent.helper import ParseHelper
 Tag = namedtuple("Tag", "rel_fname fname line end_line name kind type".split())
 
 
