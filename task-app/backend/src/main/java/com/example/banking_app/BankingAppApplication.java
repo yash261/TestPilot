@@ -1,13 +1,13 @@
-package com.example.taskapp;
+package com.example.banking_app;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class TaskappApplication {
+public class BankingAppApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(TaskappApplication.class, args);
+		SpringApplication.run(BankingAppApplication.class, args);
 	}
 
 }
