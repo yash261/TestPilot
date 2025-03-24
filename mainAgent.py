@@ -6,7 +6,6 @@ from langchain.prompts import PromptTemplate
 from langchain.tools import Tool
 from langgraph.prebuilt import ToolNode, tools_condition
 import tools.pdf_context_fetcher_tool as pdf_context
-import codegen_agent as code_context
 from langgraph.graph.message import add_messages
 
 DATA_PATH = "/Data"

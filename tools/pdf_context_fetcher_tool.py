@@ -5,7 +5,7 @@ from typing import List
 # from langchain_text_splitters import RecursiveCharacterTextSplitter
 # from langchain.schema.document import Document
 # import pdf_reader_tool as pdf_reader_tool
-import PDF_Context_Code.pdf_reader_tool as pdf_reader_tool
+import tools.pdf_reader_tool as pdf_reader_tool
 
 # Configuration
 DATA_PATH = "/Data"
