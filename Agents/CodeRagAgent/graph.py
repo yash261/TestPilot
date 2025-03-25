@@ -608,7 +608,104 @@ class RepoMap:
             return True
 
         return False
+    
+    def check_for_updates(self, changed_files,repo_dir):
+        G = nx.MultiDiGraph()
+        r = os.path.join(os.getcwd(),repo_dir,"sample_project","backend","src","main","java")
+        for root, dirs, files in os.walk(r):
+            if any(part.startswith(".") for part in root.split(os.sep)):
+                continue
 
+            for file in files:
+                file_path = os.path.join(root, file)
+               
+                rel_path = os.path.relpath(file_path, r)
+                rel_path1 = os.path.relpath(file_path, repo_dir)
+               
+                if not self.parse_helper.is_text_file(file_path):
+                    continue
+                x = rel_path1.replace("\\", "/")
+                if x in changed_files:
+                    print("Changed file: ", x)
+
+                    # Add file node
+                    file_node_name = rel_path
+                    if not G.has_node(file_node_name):
+                        G.add_node(
+                            file_node_name,
+                            file=rel_path,
+                            type="FILE",
+                            text=self.io.read_text(file_path) or "",
+                            line=0,
+                            end_line=0,
+                            name=rel_path.split("/")[-1],
+                        )
+
+                    current_class = None
+                    lang = filename_to_lang(file_path)
+                    # print(lang)
+                    code_text = {}
+                    if(lang=="java"):
+                        code = self.io.read_text(file_path)
+                        # print(code)
+                        source_lines = code.splitlines()
+                        
+                        tree1 = javalang.parse.parse(code)
+                        for path, node in tree1:
+                            if isinstance(node, javalang.tree.ClassDeclaration):
+                              
+                                class_code = self.extract_code_from_node(node, source_lines)
+                                code_text[node.name] = class_code
+                               
+
+                                for method in node.methods:
+                                    method_name = f"{node.name}.{method.name}"
+                                    method_code = self.extract_code_from_node(method, source_lines)
+                                    code_text[method_name] = method_code 
+                                    
+                    # Process all tags in file
+                    for tag in self.get_tags(file_path, rel_path):
+                        if tag.kind == "def":
+                            # print(tag)
+                            if tag.type == "class":
+                                node_type = "CLASS"
+                                current_class = tag.name
+                                current_method = None
+                            elif tag.type == "interface":
+                                node_type = "INTERFACE"
+                                current_class = tag.name
+                                current_method = None
+                            elif tag.type in ["method", "function"]:
+                                node_type = "FUNCTION"
+                                current_method = tag.name
+                            else:
+                                continue
+                            # Create fully qualified node name
+                            if current_class:
+                                node_name = f"{rel_path}:{current_class}.{tag.name}"
+                            else:
+                                node_name = f"{rel_path}:{tag.name}"
+                            text_code = ""
+                            if node_type == "CLASS":
+                                text_code = code_text.get(tag.name, "")
+                            elif node_type == "FUNCTION":
+                                text_code = code_text.get(f"{current_class}.{tag.name}", "")
+
+                            # print(text_code)
+                            # Add node
+                            if not G.has_node(node_name):
+                                G.add_node(
+                                    node_name,
+                                    file=rel_path,
+                                    line=tag.line,
+                                    end_line=tag.end_line,
+                                    type=node_type,
+                                    text= text_code,
+                                    name=tag.name,
+                                    class_name=current_class,
+                                )
+        return G
+    
     def create_graph(self, repo_dir):
         G = nx.MultiDiGraph()
         defines = defaultdict(set)
