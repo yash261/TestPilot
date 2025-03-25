@@ -14,6 +14,10 @@ import os
 import instructor
 from Agents.CodeRagAgent.graph import RepoMap
 from Agents.CodeRagAgent.utils import SimpleTokenCounter, SimpleIO, visualize_graph, generate_node_id
+import networkx as nx
+from grep_ast import filename_to_lang
+
+
 load_dotenv()
 
 genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
@@ -325,6 +329,41 @@ class InferenceService:
 
         updated_docstrings = all_docstrings
         return updated_docstrings
+    
+    async def generate_docstrings_updates(self, updated_nodes,repo_id: str="default") -> Dict[str, DocstringResponse]:
+        
+        if not updated_nodes:
+            return {}
+        
+        batches = self.batch_nodes(updated_nodes)
+        all_docstrings = {"docstrings": []}
+
+        semaphore = asyncio.Semaphore(self.parallel_requests)
+
+        async def process_batch(batch, batch_index: int):
+            async with semaphore:
+                print(f"Processing batch {batch_index} for project {repo_id}")
+                response = await self.generate_response(batch, repo_id)
+                if not isinstance(response, DocstringResponse):
+                    logger.warning(
+                        f"Parsing project {repo_id}: Invalid response from LLM. Not an instance of DocstringResponse. Retrying..."
+                    )
+                    response = await self.generate_response(batch, repo_id)
+                else:
+                    self.update_neo4j_with_docstrings(repo_id, response)
+                return response
+
+        tasks = [process_batch(batch, i) for i, batch in enumerate(batches)]
+        results = await asyncio.gather(*tasks)
+
+        for result in results:
+            if not isinstance(result, DocstringResponse):
+                logger.error(
+                    f"Project {repo_id}: Invalid response from during inference. Manually verify the project completion."
+                )
+
+        updated_docstrings = all_docstrings
+        return updated_docstrings
 
     async def generate_response(
         self,
@@ -544,6 +583,54 @@ class InferenceService:
         nx_graph = map.create_graph(repo_dir)
         # visualize_graph(nx_graph)
         self.store_graph_to_neo4j(nx_graph)
+
+    def project_updates(self,repo_dir: str,changed_files,cleanup: bool=False):
+        
+        map=RepoMap(root=repo_dir,verbose=True,main_model=SimpleTokenCounter(),io=SimpleIO())
+        
+        
+        if(cleanup):
+            self.cleanup_neo4j()
+
+        if changed_files[0]==-1: #Initial commit
+            nx_graph = map.create_graph(repo_dir)
+            self.store_graph_to_neo4j(nx_graph)
+        else:
+            nx_graph = map.check_for_updates(changed_files,repo_dir)
+            updated_nodes = self.update_graph_to_neo4j(nx_graph)
+            if updated_nodes:
+                asyncio.run(self.generate_docstrings_updates(updated_nodes))
+
+    def update_graph_to_neo4j(self,nx_graph,project_id="default"):
+       
+        with self.driver.session() as session:
+            node_count = nx_graph.number_of_nodes()
+            print(f"Number of node: {node_count}")
+            # Batch insert nodes
+            batch_size = 300
+            for i in range(0, node_count, batch_size):
+                batch_nodes = list(nx_graph.nodes(data=True))[i : i + batch_size]
+                nodes_to_update = []
+
+                for node_id, node_data in batch_nodes:
+                    
+                    nodes_to_update.append({
+                        "node_id": generate_node_id(node_id),
+                        "text": node_data.get("text", ""),
+                        "repo_id": project_id
+                        })
+                    
+
+                query = """
+                UNWIND $nodes AS node
+                MATCH (n:NODE {node_id: node.node_id})
+                SET n.text = node.text
+                """
+                session.run(query, nodes=nodes_to_update)
+                
+        
+        return nodes_to_update
+
     
     def cleanup_neo4j(self):
         print("This is a help function")
