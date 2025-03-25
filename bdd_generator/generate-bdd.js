@@ -23,8 +23,13 @@ if (!process.env.GEMINI_API_KEY) {
 const args = minimist(process.argv.slice(2));
 const COMPONENTS_DIR = args.components ? path.resolve(args.components) : path.resolve(__dirname, '../frontend/src/components');
 const DESIGN_PDF_PATH = args.design ? path.resolve(args.design) : path.resolve(__dirname, '../design/design.pdf');
+const ADDITIONAL_INFO = args['additional-info'];
 const CACHE_FILE = path.resolve(__dirname, './cache.json');
 const FEATURES_DIR = path.resolve(__dirname, '../tests/features');
+const MEMORY_FILE = path.resolve(__dirname, './memory-history.json');
+
+// Parse test credentials (e.g., --test-credentials "user,pass")
+// const [TEST_USER, TEST_PASSWORD] = (args['test-credentials'] || 'user,pass').split(',').map(s => s.trim());
 
 // Validate provided paths
 async function validatePaths() {
@@ -35,7 +40,7 @@ async function validatePaths() {
     console.error('Error: Invalid path provided.');
     console.error(`Components directory: ${COMPONENTS_DIR}`);
     console.error(`Design PDF: ${DESIGN_PDF_PATH}`);
-    console.error('Usage: node generate-tests.js --components <path> --design <pdf-path>');
+    console.error('Usage: node generate-bdd.js --components <path> --design <pdf-path> --additional-info <additional-info>');
     process.exit(1);
   }
 }
@@ -93,12 +98,46 @@ async function saveCache(cache) {
   await fs.writeFile(CACHE_FILE, JSON.stringify(cache, null, 2));
 }
 
+// Load memory history from JSON file
+async function loadMemoryHistory() {
+  try {
+    const data = await fs.readFile(MEMORY_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.log('No prior memory history found, starting fresh.');
+    return {};
+  }
+}
+
+// Save memory history to JSON file
+async function saveMemoryHistory(history) {
+  await fs.writeFile(MEMORY_FILE, JSON.stringify(history, null, 2));
+}
+
+// Extract docstring from component code
+async function extractDocstring(code, componentName) {
+  const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+  let docstring = '';
+  traverse(ast, {
+    FunctionDeclaration(path) {
+      if (path.node.id.name === componentName && path.node.leadingComments) {
+        const comment = path.node.leadingComments.find(c => c.type === 'CommentBlock' || c.type === 'CommentLine');
+        if (comment) docstring = comment.value.replace(/\*/g, '').trim();
+      }
+    },
+    VariableDeclaration(path) {
+      if (path.node.declarations[0]?.id.name === componentName && path.node.leadingComments) {
+        const comment = path.node.leadingComments.find(c => c.type === 'CommentBlock' || c.type === 'CommentLine');
+        if (comment) docstring = comment.value.replace(/\*/g, '').trim();
+      }
+    },
+  });
+  return docstring || 'No docstring provided.';
+}
+
 // Extract React component code
 async function extractComponentCode(code, componentName) {
-  const ast = parse(code, {
-    sourceType: 'module',
-    plugins: ['jsx', 'typescript'],
-  });
+  const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   let componentCode = code;
   for (const node of ast.program.body) {
     if (
@@ -314,7 +353,7 @@ async function buildDesignKnowledgeGraph(pdfPath, cache) {
   const graph = { nodes: {}, edges: [], baseUrl: null };
 
   for (const chunk of chunks) {
-    console.log('Processing chunk:', chunk);
+    // console.log('Processing chunk:', chunk);
     const { entities, relations } = await extractEntitiesAndRelations(chunk);
 
     for (const component of entities.components) {
@@ -379,7 +418,7 @@ async function buildDesignKnowledgeGraph(pdfPath, cache) {
   return graph;
 }
 
-// Build code knowledge graph from component code
+// Build enhanced code knowledge graph from component code
 async function buildCodeKnowledgeGraph(filePath, code, componentName, cache) {
   const codeHash = require('crypto').createHash('md5').update(code).digest('hex');
   if (cache.knowledgeGraph.code[filePath] && cache.knowledgeGraph.code[filePath].hash === codeHash) {
@@ -390,19 +429,20 @@ async function buildCodeKnowledgeGraph(filePath, code, componentName, cache) {
   console.log(`Building code knowledge graph for ${componentName}`);
   const graph = { nodes: {}, edges: [], baseUrl: null };
 
-  const ast = parse(code, {
-    sourceType: 'module',
-    plugins: ['jsx', 'typescript'],
-  });
-
+  const ast = parse(code, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   graph.nodes[componentName] = { type: 'component' };
 
   traverse(ast, {
-    JSXAttribute(path) {
-      if (path.node.name.name === 'id') {
-        const testId = path.node.value.value;
-        graph.nodes[testId] = { type: 'element' };
-        graph.edges.push({ from: componentName, to: testId, relation: 'contains' });
+    JSXElement(path) {
+      const elementName = path.node.openingElement.name.name.toLowerCase();
+      if (['button', 'input', 'form'].includes(elementName)) {
+        const text = path.node.children.find(child => child.type === 'JSXText')?.value?.trim();
+        const id = path.node.openingElement.attributes.find(attr => attr.name.name === 'id')?.value?.value;
+        const onClick = path.node.openingElement.attributes.find(attr => attr.name.name === 'onClick');
+        const key = text || id || `${elementName}-${path.node.start}`;
+        graph.nodes[key] = { type: 'element', tag: elementName, text };
+        graph.edges.push({ from: componentName, to: key, relation: 'contains' });
+        if (onClick) graph.nodes[key].hasAction = true;
       }
     },
     CallExpression(path) {
@@ -443,7 +483,7 @@ function mergeKnowledgeGraphs(designGraph, codeGraph, componentName) {
     };
   }
 
-  console.log(`Merged graph for ${componentName}:`, JSON.stringify(mergedGraph, null, 2));
+//   console.log(`Merged graph for ${componentName}:`, JSON.stringify(mergedGraph, null, 2));
   return mergedGraph;
 }
 
@@ -467,7 +507,8 @@ function getComponentContext(mergedGraph, componentName) {
       } else if (edge.relation === 'uses') {
         context.push(`Uses API: ${edge.to}`);
       } else if (edge.relation === 'contains') {
-        context.push(`Contains Element: ${edge.to}`);
+        const el = mergedGraph.nodes[edge.to];
+        context.push(`Contains Element: ${edge.to} (${el.tag}${el.hasAction ? ', actionable' : ''})`);
       }
     }
   });
@@ -515,8 +556,8 @@ function determineTestOrder(componentFiles, designGraph) {
   return orderedFiles;
 }
 
-// Generate BDD test cases in Gherkin format
-async function generateComponentTest(codeSnippet, componentContext, componentName, similarContext, baseUrl) {
+// Generate BDD test cases in Gherkin format with docstring and hybrid approach
+async function generateComponentTest(codeSnippet, componentContext, componentName, similarContext, baseUrl, docstring) {
   const contextSection = similarContext 
     ? `
       **Similar Previous BDD Scenarios:**
@@ -532,39 +573,59 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
     `
     : 'No similar previous code or scenarios found.';
 
+  const memoryHistoryStore = await loadMemoryHistory();
+  const memoryHistory = memoryHistoryStore[componentName] || [];
+//   console.log(`Loaded memory history for ${componentName}:`, JSON.stringify(memoryHistory, null, 2));
+
+  const memoryString = memoryHistory.length > 0 
+    ? `**Conversation History (Memory Buffer):**\n${memoryHistory.map(entry => 
+        `${entry.role}: ${entry.content}`).join('\n')}`
+    : 'No prior conversation history available for this component.';
+
+  const useFullCode = !docstring || docstring.length < 20 || codeSnippet.length < 1000;
+  const codeSection = useFullCode 
+    ? `**React Component Code:**
+      \`\`\`javascript
+      ${codeSnippet.length > 1000 ? codeSnippet.slice(0, 1000) + '...' : codeSnippet}
+      \`\`\``
+    : '**Note:** Full code omitted due to length or sufficient docstring; use context and docstring above.';
   const prompt = `
-    Generate multiple BDD test cases in Gherkin format (using Feature, Scenario, Given, When, Then) for the provided React component. The tests must:
-    - Describe the behavior of the component in a human-readable way, focusing on user interactions and expected outcomes.
-    - Include at least two positive scenarios (successful cases) and two negative scenarios (failure cases) under a single Feature.
-    - Use the complete URL in Given steps by combining the base URL and route from the context (e.g., if Base URL is "http://localhost:3000" and Route is "/dashboard", use "I am on the dashboard page at http://localhost:3000/dashboard").
-    - If the application has login/signup functionality (check context for 'Login' or 'Signup' components):
-      - For components other than 'Login' and 'Signup', include explicit login steps before proceeding:
-        - Start with "Given I am on the login page at <login-url>" (use Base URL + "/").
-        - Follow with "And I enter '<username>' into the username field" and "And I enter '<password>' into the password field" using credentials from the context if provided, otherwise default to "user" and "pass".
-        - Include "And I click the 'Login' button" to submit the login.
-        - Then proceed to "And I am on the <component> page at <component-url>".
-    - If the component is the landing page:
-      - Include positive scenarios like successful login with valid credentials and negative scenarios like login with invalid credentials.
-      - Reference UI elements generically (e.g., "username field", "password field", "Login button").
-      - Verify outcomes (e.g., redirection to another page or error message).
-    - If the component is not the landing page:
-      - Include positive scenarios (e.g., successful form submission, navigation) and negative scenarios (e.g., invalid input, insufficient data).
-      - Test core functionality with realistic examples based on the context and code.
-    - Use provided context for details (e.g., base URL, routes, APIs, credentials).
-    - Do not use specific attributes like data-testid or id for UI elements; keep descriptions generic.
-    - Do not include implementation details or automation code.
-    - Do not include markdown fences—output raw Gherkin text only.
-    - Ensure proper indentation (2 spaces) and consistent Gherkin syntax.
+  Generate multiple BDD test cases in Gherkin format (using Feature, Scenario, Given, When, Then) for the provided React component. The tests must:
+  - Describe the behavior of the component in a human-readable way, focusing on user interactions and expected outcomes.
+  - Include at least two positive scenarios (successful cases) and two negative scenarios (failure cases) under a single Feature.
+  - Use the complete URL in Given steps by combining the ${baseUrl} and route from the context (e.g., if Base URL is "http://localhost:3000" and Route is "/dashboard", use "I am on the dashboard page at http://localhost:3000/dashboard").
+  - If the application involves preconditions or specific interactions (e.g., login, data submission):
+    - Use the provided ${ADDITIONAL_INFO} to incorporate relevant details into the test steps (e.g., credentials for login, account info for transfers).
+    - For components requiring login (check context for 'Requires Login: true'), include login steps before proceeding:
+      - Start with "Given I am on the login page at <login-url>" (use Base URL + "/").
+      - Use ${ADDITIONAL_INFO} to specify preconditions or inputs (e.g., "And I enter the provided credentials" or "And I use the provided account details").
+      - Include appropriate actions (e.g., "And I click the 'Login' button").
+      - Then proceed to "And I am on the <component> page at <component-url>".
+    - For other interactions (e.g., form submission, navigation), adapt "additional_info" as needed.
+  - If the component is the landing page (e.g., identified as 'Is Landing Page: true'):
+    - Include positive scenarios (e.g., successful action with valid inputs from "additional_info") and negative scenarios (e.g., invalid or missing inputs).
+    - Reference UI elements generically (e.g., "field", "button") and verify outcomes (e.g., redirection, messages).
+  - If the component is not the landing page:
+    - Include positive scenarios (e.g., successful navigation, submission) and negative scenarios (e.g., invalid input, missing data).
+    - Test core functionality with realistic examples based on context, docstring, and "additional_info".
+  - Use provided context for structural details (e.g., base URL, routes, APIs, elements).
+  - Do not use specific attributes like data-testid or id for UI elements; keep descriptions generic.
+  - Do not include implementation details or automation code.
+  - Do not include markdown fences—output raw Gherkin text only.
+  - Ensure proper indentation (2 spaces) and consistent Gherkin syntax.
+  - Use the conversation history below to maintain consistency with previously generated tests.
+
+    ${memoryString}
 
     ${contextSection}
 
     **Combined Knowledge Graph Context for Component:**
     ${componentContext}
 
-    **React Component Code:**
-    \`\`\`javascript
-    ${codeSnippet}
-    \`\`\`
+    **Component Docstring:**
+    ${docstring}
+
+    ${codeSection}
   `;
 
   console.log(`Generating BDD tests for ${componentName} with Gemini`);
@@ -572,65 +633,142 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
   const rawTestCode = result.response.text();
   const testCode = cleanTestCode(rawTestCode);
 
-  console.log(`Raw Gemini output for ${componentName}:`, JSON.stringify(rawTestCode));
-  console.log(`Cleaned test code for ${componentName}:`, JSON.stringify(testCode));
+//   console.log(`Raw Gemini output for ${componentName}:`, JSON.stringify(rawTestCode));
+//   console.log(`Cleaned test code for ${componentName}:`, JSON.stringify(testCode));
+
+  const updatedHistory = [
+    ...(memoryHistory || []),
+    { role: 'Human', content: prompt },
+    { role: 'AI', content: testCode }
+  ];
+  memoryHistoryStore[componentName] = updatedHistory;
+//   console.log(`Updated memory history for ${componentName}:`, JSON.stringify(updatedHistory, null, 2));
+  await saveMemoryHistory(memoryHistoryStore);
 
   return testCode;
 }
 
 // Generate BDD test cases for all components and split into separate feature files
+// async function generateTestsForComponents(componentFiles, designGraph, cache) {
+//   const orderedFiles = determineTestOrder(componentFiles, designGraph);
+//   console.log('Ordered files before processing:', orderedFiles);
+
+//   await fs.mkdir(FEATURES_DIR, { recursive: true });
+
+//   for (const file of orderedFiles) {
+//     const filePath = path.join(COMPONENTS_DIR, file);
+//     const code = await fs.readFile(filePath, 'utf-8');
+//     const componentName = path.basename(filePath, path.extname(filePath));
+//     const currentCode = await extractComponentCode(code, componentName);
+//     const docstring = await extractDocstring(code, componentName);
+//     const currentEmbedding = await generateEmbedding(currentCode);
+
+//     const fileCache = cache.files[filePath] || { componentName: null, embedding: null, code: '' };
+//     const cachedEmbedding = fileCache.embedding || null;
+//     const cachedComponentName = fileCache.componentName || '';
+
+//     let generatedTest;
+//     const similarityThreshold = 0.95;
+
+//     if (!cachedEmbedding || cachedComponentName !== componentName || cosineSimilarity(currentEmbedding, cachedEmbedding) < similarityThreshold) {
+//       console.log(`Generating test for ${componentName} due to new, renamed, or changed code`);
+//       const similarContext = await retrieveSimilarContext(currentCode, cache, filePath);
+//       const codeGraph = await buildCodeKnowledgeGraph(filePath, code, componentName, cache);
+//       const combinedGraph = mergeKnowledgeGraphs(designGraph, codeGraph, componentName);
+//       const componentContext = getComponentContext(combinedGraph, componentName);
+//       generatedTest = await generateComponentTest(currentCode, componentContext, componentName, similarContext, combinedGraph.baseUrl, docstring);
+//       cache.files[filePath] = { componentName, embedding: currentEmbedding, code: currentCode };
+//       cache.tests[filePath] = generatedTest;
+//       if (cachedComponentName && cachedComponentName !== componentName) {
+//         console.log(`Component renamed from ${cachedComponentName} to ${componentName}`);
+//       }
+//     } else {
+//       console.log(`Using cached test for ${componentName}`);
+//       generatedTest = cache.tests[filePath];
+//     }
+
+//     if (!generatedTest || typeof generatedTest !== 'string' || generatedTest.trim() === '') {
+//       throw new Error(`Generated test for ${componentName} is invalid or empty`);
+//     }
+
+//     const featureFiles = splitGherkinIntoFeatures(generatedTest, componentName);
+//     for (const { fileName, content } of featureFiles) {
+//       const featureFilePath = path.join(FEATURES_DIR, fileName);
+//       await fs.writeFile(featureFilePath, content);
+//       console.log(`Generated BDD test saved at ${featureFilePath}`);
+//     }
+//   }
+
+//   await saveCache(cache);
+// }
+
+
 async function generateTestsForComponents(componentFiles, designGraph, cache) {
-  const orderedFiles = determineTestOrder(componentFiles, designGraph);
-  console.log('Ordered files before processing:', orderedFiles);
-
-  await fs.mkdir(FEATURES_DIR, { recursive: true });
-
-  for (const file of orderedFiles) {
-    const filePath = path.join(COMPONENTS_DIR, file);
-    const code = await fs.readFile(filePath, 'utf-8');
-    const componentName = path.basename(filePath, path.extname(filePath));
-    const currentCode = await extractComponentCode(code, componentName);
-    const currentEmbedding = await generateEmbedding(currentCode);
-
-    const fileCache = cache.files[filePath] || { componentName: null, embedding: null, code: '' };
-    const cachedEmbedding = fileCache.embedding || null;
-    const cachedComponentName = fileCache.componentName || '';
-
-    let generatedTest;
-    const similarityThreshold = 0.95;
-
-    if (!cachedEmbedding || cachedComponentName !== componentName || cosineSimilarity(currentEmbedding, cachedEmbedding) < similarityThreshold) {
-      console.log(`Generating test for ${componentName} due to new, renamed, or changed code`);
-      const similarContext = await retrieveSimilarContext(currentCode, cache, filePath);
-      const codeGraph = await buildCodeKnowledgeGraph(filePath, code, componentName, cache);
-      const combinedGraph = mergeKnowledgeGraphs(designGraph, codeGraph, componentName);
-      const componentContext = getComponentContext(combinedGraph, componentName);
-      generatedTest = await generateComponentTest(currentCode, componentContext, componentName, similarContext, combinedGraph.baseUrl);
-      cache.files[filePath] = { componentName, embedding: currentEmbedding, code: currentCode };
-      cache.tests[filePath] = generatedTest;
-      if (cachedComponentName && cachedComponentName !== componentName) {
-        console.log(`Component renamed from ${cachedComponentName} to ${componentName}`);
+    const orderedFiles = determineTestOrder(componentFiles, designGraph);
+    console.log('Ordered files before processing:', orderedFiles);
+  
+    await fs.mkdir(FEATURES_DIR, { recursive: true });
+  
+    for (const file of orderedFiles) {
+      const filePath = path.join(COMPONENTS_DIR, file);
+      const stats = await fs.stat(filePath);
+      const currentMtime = stats.mtimeMs; // Current modification time in milliseconds
+      const code = await fs.readFile(filePath, 'utf-8');
+      const componentName = path.basename(filePath, path.extname(filePath));
+      const currentCode = await extractComponentCode(code, componentName);
+      const docstring = await extractDocstring(code, componentName);
+      // const currentEmbedding = await generateEmbedding(currentCode); // Commented out as cosine similarity is no longer used
+  
+      const fileCache = cache.files[filePath] || { 
+        componentName: null, 
+        // embedding: null, // Commented out
+        code: '', 
+        mtime: 0 // Default to 0 if not cached
+      };
+      // const cachedEmbedding = fileCache.embedding || null; // Commented out
+      const cachedComponentName = fileCache.componentName || '';
+      const cachedMtime = fileCache.mtime || 0;
+  
+      let generatedTest;
+      // const similarityThreshold = 0.95; // Commented out
+      const hasFileChanged = currentMtime > cachedMtime; // Check if file was modified since last cached
+  
+      if (hasFileChanged || !fileCache.code || cachedComponentName !== componentName /* || cosineSimilarity(currentEmbedding, cachedEmbedding) < similarityThreshold */) {
+        console.log(`Generating new test for ${componentName} due to file change (mtime: ${currentMtime} vs cached: ${cachedMtime}), new file, or rename`);
+        const similarContext = await retrieveSimilarContext(currentCode, cache, filePath);
+        const codeGraph = await buildCodeKnowledgeGraph(filePath, code, componentName, cache);
+        const combinedGraph = mergeKnowledgeGraphs(designGraph, codeGraph, componentName);
+        const componentContext = getComponentContext(combinedGraph, componentName);
+        generatedTest = await generateComponentTest(currentCode, componentContext, componentName, similarContext, combinedGraph.baseUrl, docstring);
+        cache.files[filePath] = { 
+          componentName, 
+          // embedding: currentEmbedding, // Commented out
+          code: currentCode, 
+          mtime: currentMtime // Store current timestamp
+        };
+        cache.tests[filePath] = generatedTest;
+        if (cachedComponentName && cachedComponentName !== componentName) {
+          console.log(`Component renamed from ${cachedComponentName} to ${componentName}`);
+        }
+      } else {
+        console.log(`Using cached test for ${componentName} (no changes since mtime: ${cachedMtime})`);
+        generatedTest = cache.tests[filePath];
       }
-    } else {
-      console.log(`Using cached test for ${componentName}`);
-      generatedTest = cache.tests[filePath];
+  
+      if (!generatedTest || typeof generatedTest !== 'string' || generatedTest.trim() === '') {
+        throw new Error(`Generated test for ${componentName} is invalid or empty`);
+      }
+  
+      const featureFiles = splitGherkinIntoFeatures(generatedTest, componentName);
+      for (const { fileName, content } of featureFiles) {
+        const featureFilePath = path.join(FEATURES_DIR, fileName);
+        await fs.writeFile(featureFilePath, content);
+        console.log(`Generated BDD test saved at ${featureFilePath}`);
+      }
     }
-
-    if (!generatedTest || typeof generatedTest !== 'string' || generatedTest.trim() === '') {
-      throw new Error(`Generated test for ${componentName} is invalid or empty`);
-    }
-
-    // Split the Gherkin text into separate feature files
-    const featureFiles = splitGherkinIntoFeatures(generatedTest, componentName);
-    for (const { fileName, content } of featureFiles) {
-      const featureFilePath = path.join(FEATURES_DIR, fileName);
-      await fs.writeFile(featureFilePath, content);
-      console.log(`Generated BDD test saved at ${featureFilePath}`);
-    }
+  
+    await saveCache(cache);
   }
-
-  await saveCache(cache);
-}
 
 // Main function to generate tests
 async function generateTests() {
@@ -656,7 +794,6 @@ async function generateTests() {
     await generateTestsForComponents(componentFiles, designGraph, cache);
 
     console.log('All BDD tests generated successfully in', FEATURES_DIR);
-    console.log('Next step: Implement step definitions with a BDD framework like Cucumber.');
   } catch (error) {
     console.error('Error in test generation:', error);
     process.exit(1);

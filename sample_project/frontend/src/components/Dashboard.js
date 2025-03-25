@@ -13,9 +13,9 @@ function Dashboard() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const usersRes = await axios.get('http://localhost:8080/api/users');
+      const usersRes = await axios.get('http://192.168.0.103:8080/api/users');
       setUsers(usersRes.data.filter(u => u.id !== user.userId));
-      const transRes = await axios.get(`http://localhost:8080/api/transactions/${user.userId}`);
+      const transRes = await axios.get(`http://192.168.0.103:8080/api/transactions/${user.userId}`);
       setTransactions(transRes.data);
     };
     fetchData();
@@ -24,7 +24,7 @@ function Dashboard() {
   const handleTransfer = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:8080/api/transfer', {
+      await axios.post('http://192.168.0.103:8080/api/transfer', {
         fromUserId: user.userId,
         toUserId:toUserId,
         amount: Number(amount),
@@ -34,7 +34,7 @@ function Dashboard() {
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setAmount('');
-      const transRes = await axios.get(`http://localhost:8080/api/transactions/${user.userId}`);
+      const transRes = await axios.get(`http://192.168.0.103:8080/api/transactions/${user.userId}`);
       setTransactions(transRes.data);
     } catch (err) {
       setMessage('Transfer failed');
@@ -56,17 +56,13 @@ function Dashboard() {
       <form onSubmit={handleTransfer}>
         <div className="mb-3">
           <label htmlFor="to-user">To User</label>
-          <select
+          <input
             id="to-user"
+            type="text"
             className="form-control"
             value={toUserId}
             onChange={(e) => {alert(e.target.value);setToUserId(e.target.value)}}
-          >
-            <option value="">Select User</option>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>{u.username}</option>
-            ))}
-          </select>
+          />
         </div>
         <div className="mb-3">
           <label htmlFor="amount">Amount</label>

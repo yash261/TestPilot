@@ -11,7 +11,7 @@ function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:8080/api/login', { username, password });
+      const response = await axios.post('http://192.168.0.103:8080/api/login', { username, password });
       localStorage.setItem('user', JSON.stringify(response.data));
       navigate('/dashboard');
     } catch (err) {
@@ -27,6 +27,7 @@ function Login() {
           <label>Username</label>
           <input
             type="text"
+            id="username"
             className="form-control"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -36,6 +37,7 @@ function Login() {
           <label>Password</label>
           <input
             type="password"
+            id="password"
             className="form-control"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

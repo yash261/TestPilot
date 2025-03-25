@@ -1,0 +1,262 @@
+{
+  "files": {
+    "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Login.js": {
+      "componentName": "Login",
+      "code": "function Login() {\r\n  const [username, setUsername] = useState('');\r\n  const [password, setPassword] = useState('');\r\n  const [error, setError] = useState('');\r\n  const navigate = useNavigate();\r\n\r\n  const handleLogin = async (e) => {\r\n    e.preventDefault();\r\n    try {\r\n      const response = await axios.post('http://192.168.0.103:8080/api/login', { username, password });\r\n      localStorage.setItem('user', JSON.stringify(response.data));\r\n      navigate('/dashboard');\r\n    } catch (err) {\r\n      setError('Invalid credentials');\r\n    }\r\n  };\r\n\r\n  return (\r\n    <div className=\"mt-5\">\r\n      <h2>Login</h2>\r\n      <form onSubmit={handleLogin}>\r\n        <div className=\"mb-3\">\r\n          <label>Username</label>\r\n          <input\r\n            type=\"text\"\r\n            id=\"username\"\r\n            className=\"form-control\"\r\n            value={username}\r\n            onChange={(e) => setUsername(e.target.value)}\r\n          />\r\n        </div>\r\n        <div className=\"mb-3\">\r\n          <label>Password</label>\r\n          <input\r\n            type=\"password\"\r\n            id=\"password\"\r\n            className=\"form-control\"\r\n            value={password}\r\n            onChange={(e) => setPassword(e.target.value)}\r\n          />\r\n        </div>\r\n        {error && <p className=\"text-danger\">{error}</p>}\r\n        <button type=\"submit\" className=\"btn btn-primary\">Login</button>\r\n        <p className=\"mt-2\">\r\n          Don't have an account? <a href=\"/signup\">Sign up</a>\r\n        </p>\r\n      </form>\r\n    </div>\r\n  );\r\n}",
+      "mtime": 1742907534513.0662
+    },
+    "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Dashboard.js": {
+      "componentName": "Dashboard",
+      "code": "function Dashboard() {\r\n  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || {});\r\n  const [users, setUsers] = useState([]);\r\n  const [toUserId, setToUserId] = useState('');\r\n  const [amount, setAmount] = useState('');\r\n  const [transactions, setTransactions] = useState([]);\r\n  const [message, setMessage] = useState('');\r\n  const navigate = useNavigate();\r\n\r\n  useEffect(() => {\r\n    const fetchData = async () => {\r\n      const usersRes = await axios.get('http://192.168.0.103:8080/api/users');\r\n      setUsers(usersRes.data.filter(u => u.id !== user.userId));\r\n      const transRes = await axios.get(`http://192.168.0.103:8080/api/transactions/${user.userId}`);\r\n      setTransactions(transRes.data);\r\n    };\r\n    fetchData();\r\n  }, [user.userId]);\r\n\r\n  const handleTransfer = async (e) => {\r\n    e.preventDefault();\r\n    try {\r\n      await axios.post('http://192.168.0.103:8080/api/transfer', {\r\n        fromUserId: user.userId,\r\n        toUserId:toUserId,\r\n        amount: Number(amount),\r\n      });\r\n      setMessage('Transfer successful');\r\n      const updatedUser = { ...user, balance: user.balance - Number(amount) };\r\n      setUser(updatedUser);\r\n      localStorage.setItem('user', JSON.stringify(updatedUser));\r\n      setAmount('');\r\n      const transRes = await axios.get(`http://192.168.0.103:8080/api/transactions/${user.userId}`);\r\n      setTransactions(transRes.data);\r\n    } catch (err) {\r\n      setMessage('Transfer failed');\r\n    }\r\n  };\r\n\r\n  const handleLogout = () => {\r\n    localStorage.removeItem('user');\r\n    navigate('/');\r\n  };\r\n\r\n  return (\r\n    <div className=\"mt-5\">\r\n      <h2>Welcome, {user.username}</h2>\r\n      <p>Balance: ${user.balance.toFixed(2)}</p>\r\n      <button id=\"logout-btn\" className=\"btn btn-danger mb-3\" onClick={handleLogout}>Logout</button>\r\n\r\n      <h3>Transfer Money</h3>\r\n      <form onSubmit={handleTransfer}>\r\n        <div className=\"mb-3\">\r\n          <label htmlFor=\"to-user\">To User</label>\r\n          <input\r\n            id=\"to-user\"\r\n            type=\"text\"\r\n            className=\"form-control\"\r\n            value={toUserId}\r\n            onChange={(e) => {alert(e.target.value);setToUserId(e.target.value)}}\r\n          />\r\n        </div>\r\n        <div className=\"mb-3\">\r\n          <label htmlFor=\"amount\">Amount</label>\r\n          <input\r\n            id=\"amount\"\r\n            type=\"number\"\r\n            className=\"form-control\"\r\n            value={amount}\r\n            onChange={(e) => setAmount(e.target.value)}\r\n          />\r\n        </div>\r\n        <button id=\"transfer-btn\" type=\"submit\" className=\"btn btn-primary\">Transfer</button>\r\n        {message && <p id=\"transfer-message\" className={message.includes('failed') ? 'text-danger' : 'text-success'}>{message}</p>}\r\n      </form>\r\n\r\n      <h3 className=\"mt-4\">Transaction History</h3>\r\n      <ul className=\"list-group\">\r\n        {transactions.map(t => (\r\n          <li key={t.id} className=\"list-group-item\">\r\n            {t.fromUserId === user.userId ? 'Sent' : 'Received'} ${t.amount.toFixed(2)} \r\n            {t.fromUserId === user.userId ? ' to ' : ' from '} \r\n            {users.find(u => u.id === (t.fromUserId === user.userId ? t.toUserId : t.fromUserId))?.username}\r\n          </li>\r\n        ))}\r\n      </ul>\r\n    </div>\r\n  );\r\n}",
+      "mtime": 1742939903208.7534
+    },
+    "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Signup.js": {
+      "componentName": "Signup",
+      "code": "function Signup() {\r\n  const [username, setUsername] = useState('');\r\n  const [password, setPassword] = useState('');\r\n  const [error, setError] = useState('');\r\n  const navigate = useNavigate();\r\n\r\n  const handleSignup = async (e) => {\r\n    e.preventDefault();\r\n    try {\r\n      const response = await axios.post('http://192.168.0.103:8080/api/signup', { username, password });\r\n      localStorage.setItem('user', JSON.stringify(response.data));\r\n      navigate('/dashboard');\r\n    } catch (err) {\r\n      setError('Username already taken');\r\n    }\r\n  };\r\n\r\n  return (\r\n    <div className=\"mt-5\">\r\n      <h2>Sign Up</h2>\r\n      <form onSubmit={handleSignup}>\r\n        <div className=\"mb-3\">\r\n          <label>Username</label>\r\n          <input\r\n            type=\"text\"\r\n            className=\"form-control\"\r\n            id=\"username\"\r\n            value={username}\r\n            onChange={(e) => setUsername(e.target.value)}\r\n          />\r\n        </div>\r\n        <div className=\"mb-3\">\r\n          <label>Password</label>\r\n          <input\r\n            type=\"password\"\r\n            id=\"password\"\r\n            className=\"form-control\"\r\n            value={password}\r\n            onChange={(e) => setPassword(e.target.value)}\r\n          />\r\n        </div>\r\n        {error && <p className=\"text-danger\">{error}</p>}\r\n        <button type=\"submit\" className=\"btn btn-primary\">Sign Up</button>\r\n        <p className=\"mt-2\">\r\n          Already have an account? <a href=\"/\">Login</a>\r\n        </p>\r\n      </form>\r\n    </div>\r\n  );\r\n}",
+      "mtime": 1742907585698.4773
+    }
+  },
+  "knowledgeGraph": {
+    "design": {
+      "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\design\\design.pdf": {
+        "hash": "c688078ee9d7d06fcbf458028c309aee",
+        "graph": {
+          "nodes": {
+            "landing": {
+              "type": "component",
+              "route": "/"
+            },
+            "/": {
+              "type": "route"
+            },
+            "this": {
+              "type": "component",
+              "requiresLogin": true,
+              "route": "/dashboard"
+            },
+            "/dashboard": {
+              "type": "route"
+            },
+            "Landing": {
+              "type": "component"
+            },
+            "Login": {
+              "type": "component",
+              "isLandingPage": true
+            }
+          },
+          "edges": [
+            {
+              "from": "landing",
+              "to": "/",
+              "relation": "at-route"
+            },
+            {
+              "from": "this",
+              "to": "Login",
+              "relation": "requires"
+            },
+            {
+              "from": "this",
+              "to": "/dashboard",
+              "relation": "at-route"
+            }
+          ],
+          "baseUrl": "http://localhost:3000"
+        }
+      }
+    },
+    "code": {
+      "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Login.js": {
+        "hash": "a9e1fdabd7d902d75653ecd024877046",
+        "graph": {
+          "nodes": {
+            "Login": {
+              "type": "element",
+              "tag": "button",
+              "text": "Login"
+            },
+            "/dashboard": {
+              "type": "route"
+            },
+            "form-741": {
+              "type": "element",
+              "tag": "form",
+              "text": ""
+            },
+            "username": {
+              "type": "element",
+              "tag": "input"
+            },
+            "password": {
+              "type": "element",
+              "tag": "input"
+            }
+          },
+          "edges": [
+            {
+              "from": "Login",
+              "to": "/dashboard",
+              "relation": "navigates-to"
+            },
+            {
+              "from": "Login",
+              "to": "form-741",
+              "relation": "contains"
+            },
+            {
+              "from": "Login",
+              "to": "username",
+              "relation": "contains"
+            },
+            {
+              "from": "Login",
+              "to": "password",
+              "relation": "contains"
+            },
+            {
+              "from": "Login",
+              "to": "Login",
+              "relation": "contains"
+            }
+          ],
+          "baseUrl": null
+        }
+      },
+      "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Dashboard.js": {
+        "hash": "2646fdce72f1358b5d00fee2a3ca3c54",
+        "graph": {
+          "nodes": {
+            "Dashboard": {
+              "type": "component"
+            },
+            "/": {
+              "type": "route"
+            },
+            "Logout": {
+              "type": "element",
+              "tag": "button",
+              "text": "Logout",
+              "hasAction": true
+            },
+            "form-1989": {
+              "type": "element",
+              "tag": "form",
+              "text": ""
+            },
+            "to-user": {
+              "type": "element",
+              "tag": "input"
+            },
+            "amount": {
+              "type": "element",
+              "tag": "input"
+            },
+            "Transfer": {
+              "type": "element",
+              "tag": "button",
+              "text": "Transfer"
+            }
+          },
+          "edges": [
+            {
+              "from": "Dashboard",
+              "to": "/",
+              "relation": "navigates-to"
+            },
+            {
+              "from": "Dashboard",
+              "to": "Logout",
+              "relation": "contains"
+            },
+            {
+              "from": "Dashboard",
+              "to": "form-1989",
+              "relation": "contains"
+            },
+            {
+              "from": "Dashboard",
+              "to": "to-user",
+              "relation": "contains"
+            },
+            {
+              "from": "Dashboard",
+              "to": "amount",
+              "relation": "contains"
+            },
+            {
+              "from": "Dashboard",
+              "to": "Transfer",
+              "relation": "contains"
+            }
+          ],
+          "baseUrl": null
+        }
+      },
+      "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Signup.js": {
+        "hash": "1fe95ff5b2761168f1fc0f8351a0867c",
+        "graph": {
+          "nodes": {
+            "Signup": {
+              "type": "component"
+            },
+            "/dashboard": {
+              "type": "route"
+            },
+            "form-749": {
+              "type": "element",
+              "tag": "form",
+              "text": ""
+            },
+            "username": {
+              "type": "element",
+              "tag": "input"
+            },
+            "password": {
+              "type": "element",
+              "tag": "input"
+            },
+            "Sign Up": {
+              "type": "element",
+              "tag": "button",
+              "text": "Sign Up"
+            }
+          },
+          "edges": [
+            {
+              "from": "Signup",
+              "to": "/dashboard",
+              "relation": "navigates-to"
+            },
+            {
+              "from": "Signup",
+              "to": "form-749",
+              "relation": "contains"
+            },
+            {
+              "from": "Signup",
+              "to": "username",
+              "relation": "contains"
+            },
+            {
+              "from": "Signup",
+              "to": "password",
+              "relation": "contains"
+            },
+            {
+              "from": "Signup",
+              "to": "Sign Up",
+              "relation": "contains"
+            }
+          ],
+          "baseUrl": null
+        }
+      }
+    }
+  },
+  "tests": {
+    "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Login.js": "Feature: Login Functionality\n\n  Scenario: Successful login with valid credentials\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'user' into the username field\n    And I enter 'pass' into the password field\n    When I click the 'Login' button\n    Then I should be redirected to the dashboard page at http://localhost:3000/dashboard\n\n  Scenario: Successful login with valid credentials (alternative)\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'user' into the username field\n    And I enter 'pass' into the password field\n    When I click the 'Login' button\n    Then I should be redirected to the dashboard page at http://localhost:3000/dashboard\n\n  Scenario: Unsuccessful login with invalid username\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'xyz' into the username field\n    And I enter 'pass' into the password field\n    When I click the 'Login' button\n    Then I should see an error message indicating incorrect credentials\n\n  Scenario: Unsuccessful login with invalid password\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'user' into the username field\n    And I enter 'xyz' into the password field\n    When I click the 'Login' button\n    Then I should see an error message indicating incorrect credentials",
+    "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Dashboard.js": "Feature: Dashboard Functionality\n\n  Scenario: Successfully navigate to the dashboard after login\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'user' into the username field\n    And I enter 'pass' into the password field\n    And I click the 'Login' button\n    And I am on the Dashboard page at http://localhost:3000/dashboard\n    Then I should see the \"Logout\" button\n\n  Scenario: Successfully transfer funds\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'user' into the username field\n    And I enter 'pass' into the password field\n    And I click the 'Login' button\n    And I am on the Dashboard page at http://localhost:3000/dashboard\n    When I enter 'abc' into the \"to-user\" field\n    And I enter '100' into the \"amount\" field\n    And I click the \"Transfer\" button\n    Then I should see a success message\n\n  Scenario: Fail to transfer funds with invalid recipient\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'user' into the username field\n    And I enter 'pass' into the password field\n    And I click the 'Login' button\n    And I am on the Dashboard page at http://localhost:3000/dashboard\n    When I enter 'xyz' into the \"to-user\" field\n    And I enter '100' into the \"amount\" field\n    And I click the \"Transfer\" button\n    Then I should see an error message indicating the recipient is invalid\n\n  Scenario: Fail to transfer funds with invalid amount\n    Given I am on the login page at http://localhost:3000/\n    And I enter 'user' into the username field\n    And I enter 'pass' into the password field\n    And I click the 'Login' button\n    And I am on the Dashboard page at http://localhost:3000/dashboard\n    When I enter 'abc' into the \"to-user\" field\n    And I enter '0' into the \"amount\" field\n    And I click the \"Transfer\" button\n    Then I should see an error message indicating the amount is invalid",
+    "C:\\Users\\coold\\Desktop\\Codes\\mini cursor\\banking-app\\frontend\\src\\components\\Signup.js": "Feature: Signup Functionality\n\n  Scenario: Successful signup with valid credentials\n    Given I am on the signup page at http://localhost:3000/signup\n    And I enter 'valid_user' into the username field\n    And I enter 'strong_password' into the password field\n    When I click the 'Sign Up' button\n    Then I should be redirected to the dashboard page at http://localhost:3000/dashboard\n\n  Scenario: Successful signup with different valid credentials\n    Given I am on the signup page at http://localhost:3000/signup\n    And I enter 'unique_user' into the username field\n    And I enter 'another_strong_password' into the password field\n    When I click the 'Sign Up' button\n    Then I should be redirected to the dashboard page at http://localhost:3000/dashboard\n\n  Scenario: Unsuccessful signup with missing username\n    Given I am on the signup page at http://localhost:3000/signup\n    And I enter '' into the username field\n    And I enter 'secure_password' into the password field\n    When I click the 'Sign Up' button\n    Then I should see an error message indicating username is required\n\n  Scenario: Unsuccessful signup with weak password\n    Given I am on the signup page at http://localhost:3000/signup\n    And I enter 'new_user' into the username field\n    And I enter 'weak' into the password field\n    When I click the 'Sign Up' button\n    Then I should see an error message indicating password does not meet the criteria"
+  }
+}
