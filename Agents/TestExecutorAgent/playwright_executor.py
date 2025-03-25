@@ -50,7 +50,7 @@ class PlaywrightExecutor:
                 """,
                 query_selector,
             )
-            await self.page.fill(query_selector, text)
+            await self.page.fill(query_selector, text, timeout=5000)
             return f"Entered text '{text}' into {query_selector}"
         except Exception as e:
             return f"ERROR: Failed to enter text into {query_selector} - {str(e)}"

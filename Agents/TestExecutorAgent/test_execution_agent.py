@@ -32,19 +32,24 @@ system_prompt = """
     4. For "Then" steps: verify expectations by checking DOM content or page state
     5. If a step fails, retry up to 2 times with alternative selectors or approaches
     6. Maintain session state between steps to ensure proper test continuity
-    </execution_strategy>
+    6. Before interacting with any element, first call get_dom_field_func to obtain valid selectors.
+    7. If an element cannot be found, re-fetch the DOM and try using alternative attributes (aria-label, name, placeholder).
+    8. Never assume element selectors—verify all selections against extracted DOM data.
+    </execution_strategy>   
 
     <selector_intelligence>
-    1. Use smart element selection strategies to find the most appropriate elements
-    2. For buttons, check both <button> elements and <a> tags styled as buttons
-    3. For clickable elements, consider all interactive elements (buttons, links, [role='button'], etc.)
-    4. Use text content, aria labels, and other attributes to identify elements when IDs aren't available
-    5. Always extract actual selectors from the DOM, never invent them
+    1. Always extract actual selectors from the DOM, never invent them
+    2. Use smart element selection strategies to find the most appropriate elements
+    3. Use text content, aria labels, and other attributes to identify elements when IDs aren't available
+    4. Always extract actual selectors from the DOM, never invent them
+    5. Always validate selectors against extracted DOM elements before performing actions.
+    6. If an element is not found, attempt to retrieve new selectors.
+
     </selector_intelligence>
 
     <tool_usage>
     1. Navigate to pages using open_url_tool
-    2. Identify page elements using get_dom_fields and get_dom_text_func
+    2. Identify page elements using get_dom_field_func and get_dom_text_func
     3. Interact with elements using click_tool and enter_text_tool
     4. Use press_key_combination_tool for keyboard shortcuts and form submissions
     5. Extract information using DOM inspection tools to validate expectations
@@ -52,17 +57,18 @@ system_prompt = """
     </tool_usage>
 
     <output_reporting>
-    1. Report the execution status of each BDD step (Pass/Fail)
-    2. Provide clear explanations for any failed steps
-    3. Include relevant DOM state information for verification steps
-    4. Summarize the overall test execution with pass/fail metrics
-    5. Document any workarounds or alternative approaches used during execution
+    1. Report the execution status of the BDD script (Pass/Fail).
+    2. Provide clear explanations for any failed steps, including possible reasons and debugging suggestions.
+    3. After execution, generate the final Python test automation script containing step definitions for all executed BDD steps.
+    4. Ensure the generated code follows the Gherkin structure with step definitions mapped to actual browser automation actions.
+    5. Format the output using a structured template so users can directly use the generated code in their test suite.
     </output_reporting>
+
 """
 
 class AITestAutomationAgent:
     def __init__(self):
-        self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2, google_api_key=os.environ["GOOGLE_API_KEY"])
+        self.llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.2, google_api_key=os.environ["GOOGLE_API_KEY"])
         self.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
         self.executor = PlaywrightExecutor()
 
@@ -149,7 +155,7 @@ class AITestAutomationAgent:
                 coroutine=self.executor.geturl,
                 name="geturl",
                 description="Get the current URL of the page"
-            )
+            ),
         ]
         
         # Change agent type to STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION
@@ -158,7 +164,7 @@ class AITestAutomationAgent:
             llm=self.llm,
             agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
             verbose=True,
-            memory=self.memory,
+            # memory=self.memory,
             agent_kwargs={
                 "system_message": system_prompt
             }
