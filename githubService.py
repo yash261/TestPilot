@@ -1,9 +1,9 @@
 import requests
 import os
 import zipfile
-
 import re
-import os
+from git import Repo
+import shutil
 
 def detect_and_fetch_repo(path: str):
     """
@@ -105,3 +105,41 @@ def download_github_repo(repo_url, previous_commit=None,destination_folder=None)
     except Exception as e:
         print(f"Error: {str(e)}")
         return None
+
+
+def clone_github_repo(github_url,local_path="cloned_repo"):
+
+    # Check if the local path already exists
+    if os.path.exists(local_path):
+        # If it exists, delete it
+        print(f"Deleting existing directory at {local_path}...")
+        shutil.rmtree(local_path)
+        print("Directory deleted successfully!")
+
+    # Clone the repository
+    print(f"Cloning repository from {github_url}...")
+    repo = Repo.clone_from(github_url, local_path)
+    print("Repository cloned successfully!")
+
+    # Get the last commit (HEAD) and its parent (previous commit)
+    last_commit = repo.head.commit
+    previous_commit = last_commit.parents[0] if last_commit.parents else None
+
+    # If there's no previous commit (initial commit), compare with empty tree
+    if not previous_commit:
+        # For initial commit, list all files added
+        changed_files = [-1]
+    else:
+        # Get the diff between the last commit and its parent
+        diff = last_commit.diff(previous_commit)
+        # Extract changed file paths into a list
+        changed_files = [d.a_path for d in diff if d.a_path] + [d.b_path for d in diff if d.b_path and d.b_path != d.a_path]
+
+    # Remove duplicates
+    changed_files = list(set(changed_files))
+    if len(changed_files) == 0:
+        changed_files = [-1]
+    # Print the list of changed files
+    print("Changed files from the last commit:", changed_files)
+    # changed_files = [-1]
+    return local_path, changed_files
