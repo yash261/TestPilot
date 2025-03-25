@@ -32,6 +32,7 @@ public class BankingService {
     }
 
     public User login(String username, String password) {
+        // Testing
         return userRepository.findByUsername(username)
                 .filter(u -> u.getPassword().equals(password))
                 .orElse(null);
