@@ -20,27 +20,32 @@ if (!process.env.GEMINI_API_KEY) {
 }
 
 // Parse command-line arguments
+// Parse command-line arguments
 const args = minimist(process.argv.slice(2));
 const COMPONENTS_DIR = args.components ? path.resolve(args.components) : path.resolve(__dirname, '../frontend/src/components');
-const DESIGN_PDF_PATH = args.design ? path.resolve(args.design) : path.resolve(__dirname, '../design/design.pdf');
-const ADDITIONAL_INFO = args['additional-info'];
+const DESIGN_PDF_PATH = args.design ? path.resolve(args.design) : null; // Allow null if not provided
 const CACHE_FILE = path.resolve(__dirname, './cache.json');
 const FEATURES_DIR = path.resolve(__dirname, '../tests/features');
 const MEMORY_FILE = path.resolve(__dirname, './memory-history.json');
+const additional_info = args['additional_info'] ? args['additional_info'] : 'Use previous history and context for generating tests and getting test info'; // Custom default
 
 // Parse test credentials (e.g., --test-credentials "user,pass")
 // const [TEST_USER, TEST_PASSWORD] = (args['test-credentials'] || 'user,pass').split(',').map(s => s.trim());
 
-// Validate provided paths
+// Validate provided paths (only if design PDF is provided)
 async function validatePaths() {
   try {
     await fs.access(COMPONENTS_DIR);
-    await fs.access(DESIGN_PDF_PATH);
+    if (DESIGN_PDF_PATH) {
+      await fs.access(DESIGN_PDF_PATH);
+    } else {
+      console.log('No design PDF provided; will attempt to use cached design knowledge graph');
+    }
   } catch (error) {
     console.error('Error: Invalid path provided.');
     console.error(`Components directory: ${COMPONENTS_DIR}`);
-    console.error(`Design PDF: ${DESIGN_PDF_PATH}`);
-    console.error('Usage: node generate-bdd.js --components <path> --design <pdf-path> --additional-info <additional-info>');
+    if (DESIGN_PDF_PATH) console.error(`Design PDF: ${DESIGN_PDF_PATH}`);
+    console.error('Usage: node generate-tests.js --components <path> [--design <pdf-path>] --additional_info "changes"');
     process.exit(1);
   }
 }
@@ -409,8 +414,8 @@ async function buildDesignKnowledgeGraph(pdfPath, cache) {
     console.log('No landing page detected; defaulting to Login');
   }
 
-  console.log('Graph nodes:', JSON.stringify(graph.nodes, null, 2));
-  console.log('Graph edges:', JSON.stringify(graph.edges, null, 2));
+  // console.log('Graph nodes:', JSON.stringify(graph.nodes, null, 2));
+  // console.log('Graph edges:', JSON.stringify(graph.edges, null, 2));
   console.log('Base URL:', graph.baseUrl);
 
   cache.knowledgeGraph.design[pdfPath] = { hash: pdfHash, graph };
@@ -456,7 +461,7 @@ async function buildCodeKnowledgeGraph(filePath, code, componentName, cache) {
     },
   });
 
-  console.log(`Code graph for ${componentName}:`, JSON.stringify(graph, null, 2));
+  // console.log(`Code graph for ${componentName}:`, JSON.stringify(graph, null, 2));
   cache.knowledgeGraph.code[filePath] = { hash: codeHash, graph };
   await saveCache(cache);
   return graph;
@@ -556,7 +561,6 @@ function determineTestOrder(componentFiles, designGraph) {
   return orderedFiles;
 }
 
-// Generate BDD test cases in Gherkin format with docstring and hybrid approach
 async function generateComponentTest(codeSnippet, componentContext, componentName, similarContext, baseUrl, docstring) {
   const contextSection = similarContext 
     ? `
@@ -575,7 +579,7 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
 
   const memoryHistoryStore = await loadMemoryHistory();
   const memoryHistory = memoryHistoryStore[componentName] || [];
-//   console.log(`Loaded memory history for ${componentName}:`, JSON.stringify(memoryHistory, null, 2));
+  console.log(`Loaded memory history for ${componentName}:`, JSON.stringify(memoryHistory, null, 2));
 
   const memoryString = memoryHistory.length > 0 
     ? `**Conversation History (Memory Buffer):**\n${memoryHistory.map(entry => 
@@ -589,31 +593,33 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
       ${codeSnippet.length > 1000 ? codeSnippet.slice(0, 1000) + '...' : codeSnippet}
       \`\`\``
     : '**Note:** Full code omitted due to length or sufficient docstring; use context and docstring above.';
+
   const prompt = `
-  Generate multiple BDD test cases in Gherkin format (using Feature, Scenario, Given, When, Then) for the provided React component. The tests must:
-  - Describe the behavior of the component in a human-readable way, focusing on user interactions and expected outcomes.
-  - Include at least two positive scenarios (successful cases) and two negative scenarios (failure cases) under a single Feature.
-  - Use the complete URL in Given steps by combining the ${baseUrl} and route from the context (e.g., if Base URL is "http://localhost:3000" and Route is "/dashboard", use "I am on the dashboard page at http://localhost:3000/dashboard").
-  - If the application involves preconditions or specific interactions (e.g., login, data submission):
-    - Use the provided ${ADDITIONAL_INFO} to incorporate relevant details into the test steps (e.g., credentials for login, account info for transfers).
-    - For components requiring login (check context for 'Requires Login: true'), include login steps before proceeding:
-      - Start with "Given I am on the login page at <login-url>" (use Base URL + "/").
-      - Use ${ADDITIONAL_INFO} to specify preconditions or inputs (e.g., "And I enter the provided credentials" or "And I use the provided account details").
-      - Include appropriate actions (e.g., "And I click the 'Login' button").
-      - Then proceed to "And I am on the <component> page at <component-url>".
-    - For other interactions (e.g., form submission, navigation), adapt "additional_info" as needed.
-  - If the component is the landing page (e.g., identified as 'Is Landing Page: true'):
-    - Include positive scenarios (e.g., successful action with valid inputs from "additional_info") and negative scenarios (e.g., invalid or missing inputs).
-    - Reference UI elements generically (e.g., "field", "button") and verify outcomes (e.g., redirection, messages).
-  - If the component is not the landing page:
-    - Include positive scenarios (e.g., successful navigation, submission) and negative scenarios (e.g., invalid input, missing data).
-    - Test core functionality with realistic examples based on context, docstring, and "additional_info".
-  - Use provided context for structural details (e.g., base URL, routes, APIs, elements).
-  - Do not use specific attributes like data-testid or id for UI elements; keep descriptions generic.
-  - Do not include implementation details or automation code.
-  - Do not include markdown fences—output raw Gherkin text only.
-  - Ensure proper indentation (2 spaces) and consistent Gherkin syntax.
-  - Use the conversation history below to maintain consistency with previously generated tests.
+    Generate multiple BDD test cases in Gherkin format (using Feature, Scenario, Given, When, Then) for the provided React component. The tests must:
+    - Describe the behavior of the component in a human-readable way, focusing on user interactions and expected outcomes.
+    - Include at least two positive scenarios (successful cases) and two negative scenarios (failure cases) under a single Feature.
+    - Use the complete URL in Given steps by combining the base URL and route from the context (e.g., if Base URL is "${baseUrl}" and Route is "/dashboard", use "I am on the dashboard page at ${baseUrl}/dashboard").
+    - If the application involves preconditions or specific interactions (e.g., login, data submission):
+      - Use the provided "additional_info" to incorporate relevant details into the test steps (e.g., credentials for login, account info for transfers, or minor design changes).
+      - For components requiring login (check context for 'Requires Login: true'), include login steps before proceeding:
+        - Start with "Given I am on the login page at ${baseUrl}/".
+        - Use "additional_info" to specify preconditions or inputs (e.g., "And I enter the provided credentials" or "And I use the provided account details").
+        - Include appropriate actions (e.g., "And I click the 'Login' button").
+        - Then proceed to "And I am on the <component> page at ${baseUrl}/<route>".
+      - For other interactions (e.g., form submission, navigation), adapt "additional_info" as needed.
+    - If the component is the landing page (e.g., identified as 'Is Landing Page: true'):
+      - Include positive scenarios (e.g., successful action with valid inputs from "additional_info") and negative scenarios (e.g., invalid or missing inputs).
+      - Reference UI elements generically (e.g., "field", "button") and verify outcomes (e.g., redirection, messages).
+    - If the component is not the landing page:
+      - Include positive scenarios (e.g., successful navigation, submission) and negative scenarios (e.g., invalid input, missing data).
+      - Test core functionality with realistic examples based on context, docstring, and "additional_info".
+    - Use provided context for structural details (e.g., routes, APIs, elements) derived from the cached design knowledge graph.
+    - Incorporate any minor design changes or updates from "additional_info" without altering the base knowledge graph context.
+    - Do not use specific attributes like data-testid or id for UI elements; keep descriptions generic.
+    - Do not include implementation details or automation code.
+    - Do not include markdown fences—output raw Gherkin text only.
+    - Ensure proper indentation (2 spaces) and consistent Gherkin syntax.
+    - Use the conversation history below to maintain consistency with previously generated tests.
 
     ${memoryString}
 
@@ -625,6 +631,12 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
     **Component Docstring:**
     ${docstring}
 
+    **Base URL:**
+    ${baseUrl}
+
+    **Additional Info (Including Minor Design Changes):**
+    ${additional_info}
+
     ${codeSection}
   `;
 
@@ -633,8 +645,8 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
   const rawTestCode = result.response.text();
   const testCode = cleanTestCode(rawTestCode);
 
-//   console.log(`Raw Gemini output for ${componentName}:`, JSON.stringify(rawTestCode));
-//   console.log(`Cleaned test code for ${componentName}:`, JSON.stringify(testCode));
+  // console.log(`Raw Gemini output for ${componentName}:`, JSON.stringify(rawTestCode));
+  // console.log(`Cleaned test code for ${componentName}:`, JSON.stringify(testCode));
 
   const updatedHistory = [
     ...(memoryHistory || []),
@@ -642,12 +654,11 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
     { role: 'AI', content: testCode }
   ];
   memoryHistoryStore[componentName] = updatedHistory;
-//   console.log(`Updated memory history for ${componentName}:`, JSON.stringify(updatedHistory, null, 2));
+  // console.log(`Updated memory history for ${componentName}:`, JSON.stringify(updatedHistory, null, 2));
   await saveMemoryHistory(memoryHistoryStore);
 
   return testCode;
 }
-
 
 
 async function generateTestsForComponents(componentFiles, designGraph, cache) {
@@ -744,7 +755,6 @@ async function generateTestsForComponents(componentFiles, designGraph, cache) {
   await saveCache(cache);
 }
 
-// Main function to generate tests
 async function generateTests() {
   try {
     console.log('Validating provided paths...');
@@ -756,8 +766,22 @@ async function generateTests() {
     console.log('Loading cache...');
     const cache = await loadCache();
 
-    console.log('Building design knowledge graph from PDF...');
-    const designGraph = await buildDesignKnowledgeGraph(DESIGN_PDF_PATH, cache);
+    console.log('Retrieving or building design knowledge graph...');
+    let designGraph;
+    const designCache = cache.knowledgeGraph.design || {};
+    const cachedDesignGraph = DESIGN_PDF_PATH ? designCache[DESIGN_PDF_PATH]?.graph : Object.values(designCache)[0]?.graph; // Use first available if no PDF
+
+    if (DESIGN_PDF_PATH) {
+      console.log(`Building design knowledge graph from ${DESIGN_PDF_PATH}`);
+      designGraph = await buildDesignKnowledgeGraph(DESIGN_PDF_PATH, cache);
+    } else if (cachedDesignGraph) {
+      console.log('Using cached design knowledge graph');
+      designGraph = cachedDesignGraph;
+    } else {
+      console.error('Error: No design PDF provided and no design knowledge graph found in cache');
+      console.error('Cache state:', JSON.stringify(cache.knowledgeGraph, null, 2));
+      process.exit(1);
+    }
 
     console.log('Scanning components directory...');
     const componentFiles = (await fs.readdir(COMPONENTS_DIR)).filter(file => 
