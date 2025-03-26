@@ -3,7 +3,7 @@
 
 # Context-Aware Testing System for Financial Ecosystems
 
-Welcome to the   **Context-Aware Testing System**, a revolutionary approach to testing in the fast-evolving financial ecosystem. This project leverages Generative AI to dynamically generate and adapt test scenarios, focusing on end-to-end functional testing for financial systems. Developed by Chirag Garg, Dhruv Kumar, Mohitpal Singh, and Yash Goel.
+Welcome to the **Context-Aware Testing System**, a revolutionary approach to testing in the fast-evolving financial ecosystem. This project leverages Generative AI to dynamically generate and adapt test scenarios, focusing on end-to-end functional testing for financial systems. Developed by Chirag Garg, Dhruv Kumar, Mohitpal Singh, and Yash Goel.
 
 ## Table of Contents
 - [Introduction](#introduction)
