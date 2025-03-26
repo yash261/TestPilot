@@ -710,7 +710,7 @@ class RepoMap:
         G = nx.MultiDiGraph()
         defines = defaultdict(set)
         references = defaultdict(set)
-        repo_dir = os.path.join(repo_dir, "Backend")
+        repo_dir = os.path.join(os.getcwd(),repo_dir,"sample_project","backend","src","main","java")
         seen_relationships = set()
 
         for root, dirs, files in os.walk(repo_dir):
