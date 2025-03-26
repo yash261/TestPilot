@@ -29,10 +29,11 @@ def main():
         return
     
     
+    clean_up = True
     # Run the inference service
     service = InferenceService()
-    service.project_updates(repo_dir,changed_files,True)
-    if(-1 in changed_files):
+    service.project_updates(repo_dir,changed_files,clean_up)
+    if clean_up:
         asyncio.run(service.run_inference())
 
 if __name__ == "__main__":
