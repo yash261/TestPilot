@@ -497,7 +497,7 @@ class InferenceService:
         with self.driver.session() as session:
             node_count = nx_graph.number_of_nodes()
             if node_count == 0:
-                print("No nodes to update")
+                print("No nodes to store")
                 return
             print(f"Number of node: {node_count}")
             # Batch insert nodes
@@ -608,6 +608,9 @@ class InferenceService:
        
         with self.driver.session() as session:
             node_count = nx_graph.number_of_nodes()
+            if node_count == 0:
+                print("No nodes to update")
+                return []
             print(f"Number of node: {node_count}")
             # Batch insert nodes
             batch_size = 300
