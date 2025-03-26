@@ -28,8 +28,6 @@ While supporting API and unit testing, our primary focus is on **end-to-end func
 
 ---
 
----
-
 ## Demo
 To be added
 
@@ -72,8 +70,6 @@ Our context-aware testing system, powered by Generative AI, transforms financial
 - Minimizing manual effort.
 - Enhancing coverage and reliability.
 
----
-
 ### Key Benefits
 - **Enhanced Test Coverage**: Comprehensive validation of financial systems.
 - **Reduced Manual Effort**: Automation minimizes human intervention.
@@ -95,7 +91,6 @@ Our architecture integrates multiple components for seamless operation:
 
 ![Knowledge Graph & Vector Embeddings Generation](https://github.com/yash261/KnowledgeGraphForCode/blob/main/Images/Knowledge_Graph_and_Embeddings.png)
 
----
 
 ### Workflow
 1. Fetch context from code and documents.
@@ -106,7 +101,6 @@ Our architecture integrates multiple components for seamless operation:
 
 ![Architectural Workflow](https://github.com/yash261/KnowledgeGraphForCode/blob/main/Images/Workflow_Diagram.png)
 
----
 
 ### Future Enhancements
 We’re planning exciting upgrades:
@@ -115,8 +109,6 @@ We’re planning exciting upgrades:
 - **Grafana**: Integrate with monitoring tools for test reports and coverage.
 - **CI/CD Integration**: Convert test cases into config files for automated execution.
 - **JIRA Integration**: Fetch context from JIRA for new test cases.
-
----
 
 ---
 
