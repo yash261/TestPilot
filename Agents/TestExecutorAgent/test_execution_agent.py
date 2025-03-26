@@ -1,4 +1,5 @@
 import asyncio
+from functools import wraps
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.tools import StructuredTool
@@ -6,7 +7,15 @@ from langchain.agents import initialize_agent, AgentType
 from langchain.memory import ConversationBufferMemory
 from dotenv import load_dotenv
 from Agents.TestExecutorAgent.playwright_executor import PlaywrightExecutor
-from Agents.TestExecutorAgent.models import NavigateInput, ClickInput, InputTextInput, PressKeyInput
+from Agents.TestExecutorAgent.models import NavigateInput, ClickInput, InputTextInput, PressKeyInput, TestResultInput
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langgraph.graph import MessagesState
+from langgraph.graph import START, StateGraph
+from langgraph.prebuilt import tools_condition, ToolNode
+from langgraph.graph import MessagesState
+
+from Agents.TestExecutorAgent.utils import report_test_result
+
 
 load_dotenv()
 
@@ -59,11 +68,9 @@ system_prompt = """
     <output_reporting>
     1. Report the execution status of the BDD script (Pass/Fail).
     2. Provide clear explanations for any failed steps, including possible reasons and debugging suggestions.
-    3. After execution, generate the final Python test automation script containing step definitions for all executed BDD steps.
-    4. Ensure the generated code follows the Gherkin structure with step definitions mapped to actual browser automation actions.
-    5. Format the output using a structured template so users can directly use the generated code in their test suite.
+    3. After execution, generate the final A JSON-stringified object representing the test execution flow, containing step definitions for executed steps.
+    4. Format the output using a structured template so users can directly use the generated json in their test suite.
     </output_reporting>
-
 """
 
 class AITestAutomationAgent:
@@ -76,6 +83,7 @@ class AITestAutomationAgent:
         self.tools = [
             StructuredTool.from_function(
                 coroutine=self.executor.navigate,
+                func=lambda url, timeout=5: self.sync_wrapper(self.executor.navigate(url, timeout)),
                 name="navigate",
                 description="""
                 Opens a specified URL in the active browser instance. Waits for an initial load event, then waits for either
@@ -90,6 +98,7 @@ class AITestAutomationAgent:
             ),
             StructuredTool.from_function(
                 coroutine=self.executor.click,
+                func=lambda selector: self.sync_wrapper(self.executor.click(selector)),
                 name="click",
                 description="""            
                 Executes a click action on the element matching the given query selector string within the currently open web page.
@@ -104,6 +113,7 @@ class AITestAutomationAgent:
             ),
             StructuredTool.from_function(
                 coroutine=self.executor.get_dom_texts_func,
+                func=lambda: self.sync_wrapper(self.executor.get_dom_texts_func()),
                 name="get_dom_texts_func",
                 description="""    
                 Retrieves the text content of the active page's DOM.
@@ -111,6 +121,7 @@ class AITestAutomationAgent:
             ),
             StructuredTool.from_function(
                 coroutine=self.executor.input_text,
+                func=lambda query_selector, text: self.sync_wrapper(self.executor.input_text(query_selector, text)),
                 name="input_text",
                 description=
                 """
@@ -142,42 +153,117 @@ class AITestAutomationAgent:
             ),
             StructuredTool.from_function(
                 coroutine=self.executor.press_key,
+                func=lambda selector, key: self.sync_wrapper(self.executor.press_key(selector, key)),
                 name="press_key",
                 description="Simulate a key press on an element identified by a CSS selector",
                 args_schema=PressKeyInput
             ),
             StructuredTool.from_function(
                 coroutine=self.executor.get_dom_field_func,
+                func=lambda: self.sync_wrapper(self.executor.get_dom_field_func()),
                 name="get_dom_field_func",
                 description="Retrieve all interactive fields from the active page's DOM."
             ),
             StructuredTool.from_function(
                 coroutine=self.executor.geturl,
+                func=lambda: self.sync_wrapper(self.executor.geturl()),
                 name="geturl",
                 description="Get the current URL of the page"
             ),
+            StructuredTool.from_function(
+                func=lambda output: self.sync_wrapper(self.close_and_report(output)),
+                coroutine=self.close_and_report,
+                name="report_test_result",
+                description="""
+                A tool to report the final test execution result.
+                
+                Parameters:
+                - output: A JSON-stringified object representing the test execution flow with the following structure:
+                    {
+                    "scenario": "User Login",
+                    "message": "Optional detailed explanation of the result",
+                    "status": "Overall test execution status ('pass' or 'fail')"
+                    "steps": [
+                        {
+                        "action": "navigate",
+                        "params": {
+                            "url": "https://example.com/login"
+                        }
+                        },
+                        {
+                        "action": "input_text",
+                        "params": {
+                            "selector": "#username",
+                            "text": "testuser"
+                        }
+                        },
+                        {
+                        "action": "click",
+                        "params": {
+                            "selector": "#login-button"
+                        }
+                        }
+                    ]
+                    }
+                
+                This tool helps in:
+                1. Logging test execution results
+                2. Storing generated test scripts
+                3. Providing a summary of the test run
+                """,
+                args_schema=TestResultInput
+            )
         ]
-        
-        # Change agent type to STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION
-        self.agent = initialize_agent(
-            tools=self.tools,
-            llm=self.llm,
-            agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
-            verbose=True,
-            # memory=self.memory,
-            agent_kwargs={
-                "system_message": system_prompt
-            }
-        )
+        self.llm_with_tools = self.llm.bind_tools(self.tools)
 
-    async def run_tests(self,bdd_script):
-        prompt = f"""
-        BDD Script 
-        ```
-        {bdd_script}
-        ```
+    async def close_and_report(self,output):
+        await self.executor.close()
+        report_test_result(output)
+
+    def sync_wrapper(self,async_func):
         """
-        await self.agent.ainvoke({"input" : prompt})
+        Wrapper to run async functions synchronously with proper event loop handling
+        """
+        @wraps(async_func)
+        def wrapper(*args, **kwargs):
+            try:
+                # Try to get the current event loop
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # If no event loop exists, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            try:
+                # Run the async function synchronously
+                return loop.run_until_complete(async_func(*args, **kwargs))
+            except Exception as e:
+                print(f"Error in async function execution: {e}")
+                raise
+        return wrapper
 
+
+    def assistant(self,state: MessagesState):
+        return {"messages": [self.llm_with_tools.invoke([SystemMessage(content=system_prompt)] + state["messages"])]}
+    
+    async def create_graph(self):
+
+        # Graph
+        builder = StateGraph(MessagesState)
+
+        # Define nodes: these do the work
+        builder.add_node("assistant", self.assistant)
+        builder.add_node("tools", ToolNode(self.tools))
+
+        # Define edges: these determine the control flow
+        builder.add_edge(START, "assistant")
+        builder.add_conditional_edges(
+            "assistant",
+            tools_condition,
+        )
+        builder.add_edge("tools", "assistant")
+        graph = builder.compile()
+        return graph
+        
     async def close(self):
         await self.executor.close()

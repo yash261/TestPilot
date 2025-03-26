@@ -3,6 +3,11 @@ import time
 import threading
 import os
 from githubService import detect_and_fetch_repo
+import asyncio
+from Agents.TestExecutorAgent.test_execution_agent import AITestAutomationAgent
+import aiohttp
+
+
 
 # Global list to store updates (thread-safe)
 updates_list = []
@@ -44,21 +49,49 @@ def execute_js_script(script_path, **kwargs):
         print(f"Error executing script: {e.stderr}")
         return None
 
-
-# Function to simulate a background process
-def execute_tests(directory_path):
+async def run_test(bdd_script):
+    """Function to make an API call with the BDD script."""
     global updates_list
-
-    tests_path=execute_js_script("test.js", path=directory_path)
-    print(f"Tests path: {tests_path}")
     
-    for root, _, files in os.walk(directory_path):
-        for file in files:
-            file_path = os.path.join(root, file)
-            print(process_file(file_path))
-            updates_list.append(f"📄 Processed file: {file_path}")
-            time.sleep(1)
-            st.session_state["update_flag"] = not st.session_state.get("update_flag", False)  # Trigger UI refresh
+    # Define the API endpoint (replace with your actual endpoint)
+    api_url = "http://127.0.0.1:5000/run-test"  # Replace with your API URL
+    
+    # Prepare the payload (e.g., sending the BDD script as JSON)
+    payload = {
+        "script": bdd_script,
+    }
+    try:
+        # Make the asynchronous API call
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, json=payload) as response:
+                if response.status == 200:
+                    result = await response.json()  # Assuming the API returns JSON
+                    updates_list.append(f"✅ API call succeeded: {result}")
+                else:
+                    updates_list.append(f"❌ API call failed with status {response.status}")
+    except Exception as e:
+        updates_list.append(f"❌ Error during connect to test executor service call: {str(e)}")
+
+def execute_tests(directory_path,design_path,additional_message):
+    global updates_list
+    directory_path = os.path.join(directory_path, "frontend", "src", "components")
+
+    async def run_all_tests():
+        updates_list.append(f"Generating bdd...")
+        tests_folder_path=execute_js_script("bdd_generator/generate-bdd.js", components=directory_path,design=design_path,additional_info=additional_message)
+        return
+        for root, _, files in os.walk(tests_folder_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                bdd = process_file(file_path)
+                updates_list.append(f"📄 Running... {file}")
+
+                await run_test(bdd)
+
+                st.session_state["update_flag"] = not st.session_state.get("update_flag", False)  # UI refresh
+
+    # Ensure Playwright runs in the main thread
+    asyncio.run(run_all_tests())  
 
 # Streamlit UI
 st.set_page_config(page_title="Testing System", layout="centered")
@@ -96,7 +129,7 @@ if st.button("Execute", help="Click to start processing."):
         st.error("Invalid repository path! Please enter a valid GitHub link or local path.")
     else:
         repo_dir = repo_result[0]
-        thread = threading.Thread(target=execute_tests, daemon=True, args=(repo_dir,))
+        thread = threading.Thread(target=execute_tests, daemon=True, args=(repo_dir,file_path,additional_info))
         thread.start()
         st.success("Processing started! Updates will appear below.")
 

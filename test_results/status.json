@@ -1,0 +1,35 @@
+{
+    "scenario": "Successful login with valid credentials",
+    "steps": [
+        {
+            "action": "navigate",
+            "params": {
+                "url": "http://localhost:3000/"
+            }
+        },
+        {
+            "action": "input_text",
+            "params": {
+                "selector": ".form-control[type='text']",
+                "text": "user"
+            }
+        },
+        {
+            "action": "input_text",
+            "params": {
+                "selector": ".form-control[type='password']",
+                "text": "pass"
+            }
+        },
+        {
+            "action": "click",
+            "params": {
+                "selector": ".btn.btn-primary"
+            }
+        },
+        {
+            "action": "geturl",
+            "expected": "http://localhost:3000/dashboard"
+        }
+    ]
+}

@@ -15,8 +15,8 @@ if (envConfig.error) {
   throw new Error('Failed to load .env file: ' + envConfig.error.message);
 }
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY is not defined in .env file');
+if (!process.env.GOOGLE_API_KEY) {
+  throw new Error('GOOGLE_API_KEY is not defined in .env file');
 }
 
 // Parse command-line arguments
@@ -51,7 +51,7 @@ async function validatePaths() {
 }
 
 // Initialize Gemini API with gemini-2.0-flash
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
 // Initialize embedding model

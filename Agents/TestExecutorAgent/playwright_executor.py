@@ -4,12 +4,13 @@ from typing import List
 from playwright.async_api import async_playwright
 
 class PlaywrightExecutor:
-    def __init__(self):
+    def __init__(self,initialize=True):
         try:
             self.playwright = None  # Initialize as None
             self.browser = None
             self.page = None
-            asyncio.ensure_future(self.initialize_playwright())
+            if(initialize):
+                asyncio.ensure_future(self.initialize_playwright())
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Playwright: {str(e)}")
         
