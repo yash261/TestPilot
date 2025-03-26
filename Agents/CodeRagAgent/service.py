@@ -496,6 +496,9 @@ class InferenceService:
     def store_graph_to_neo4j(self,nx_graph,project_id="default"):
         with self.driver.session() as session:
             node_count = nx_graph.number_of_nodes()
+            if node_count == 0:
+                print("No nodes to update")
+                return
             print(f"Number of node: {node_count}")
             # Batch insert nodes
             batch_size = 300
