@@ -648,127 +648,101 @@ async function generateComponentTest(codeSnippet, componentContext, componentNam
   return testCode;
 }
 
-// Generate BDD test cases for all components and split into separate feature files
-// async function generateTestsForComponents(componentFiles, designGraph, cache) {
-//   const orderedFiles = determineTestOrder(componentFiles, designGraph);
-//   console.log('Ordered files before processing:', orderedFiles);
-
-//   await fs.mkdir(FEATURES_DIR, { recursive: true });
-
-//   for (const file of orderedFiles) {
-//     const filePath = path.join(COMPONENTS_DIR, file);
-//     const code = await fs.readFile(filePath, 'utf-8');
-//     const componentName = path.basename(filePath, path.extname(filePath));
-//     const currentCode = await extractComponentCode(code, componentName);
-//     const docstring = await extractDocstring(code, componentName);
-//     const currentEmbedding = await generateEmbedding(currentCode);
-
-//     const fileCache = cache.files[filePath] || { componentName: null, embedding: null, code: '' };
-//     const cachedEmbedding = fileCache.embedding || null;
-//     const cachedComponentName = fileCache.componentName || '';
-
-//     let generatedTest;
-//     const similarityThreshold = 0.95;
-
-//     if (!cachedEmbedding || cachedComponentName !== componentName || cosineSimilarity(currentEmbedding, cachedEmbedding) < similarityThreshold) {
-//       console.log(`Generating test for ${componentName} due to new, renamed, or changed code`);
-//       const similarContext = await retrieveSimilarContext(currentCode, cache, filePath);
-//       const codeGraph = await buildCodeKnowledgeGraph(filePath, code, componentName, cache);
-//       const combinedGraph = mergeKnowledgeGraphs(designGraph, codeGraph, componentName);
-//       const componentContext = getComponentContext(combinedGraph, componentName);
-//       generatedTest = await generateComponentTest(currentCode, componentContext, componentName, similarContext, combinedGraph.baseUrl, docstring);
-//       cache.files[filePath] = { componentName, embedding: currentEmbedding, code: currentCode };
-//       cache.tests[filePath] = generatedTest;
-//       if (cachedComponentName && cachedComponentName !== componentName) {
-//         console.log(`Component renamed from ${cachedComponentName} to ${componentName}`);
-//       }
-//     } else {
-//       console.log(`Using cached test for ${componentName}`);
-//       generatedTest = cache.tests[filePath];
-//     }
-
-//     if (!generatedTest || typeof generatedTest !== 'string' || generatedTest.trim() === '') {
-//       throw new Error(`Generated test for ${componentName} is invalid or empty`);
-//     }
-
-//     const featureFiles = splitGherkinIntoFeatures(generatedTest, componentName);
-//     for (const { fileName, content } of featureFiles) {
-//       const featureFilePath = path.join(FEATURES_DIR, fileName);
-//       await fs.writeFile(featureFilePath, content);
-//       console.log(`Generated BDD test saved at ${featureFilePath}`);
-//     }
-//   }
-
-//   await saveCache(cache);
-// }
 
 
 async function generateTestsForComponents(componentFiles, designGraph, cache) {
-    const orderedFiles = determineTestOrder(componentFiles, designGraph);
-    console.log('Ordered files before processing:', orderedFiles);
-  
-    await fs.mkdir(FEATURES_DIR, { recursive: true });
-  
-    for (const file of orderedFiles) {
-      const filePath = path.join(COMPONENTS_DIR, file);
-      const stats = await fs.stat(filePath);
-      const currentMtime = stats.mtimeMs; // Current modification time in milliseconds
-      const code = await fs.readFile(filePath, 'utf-8');
-      const componentName = path.basename(filePath, path.extname(filePath));
-      const currentCode = await extractComponentCode(code, componentName);
-      const docstring = await extractDocstring(code, componentName);
-      // const currentEmbedding = await generateEmbedding(currentCode); // Commented out as cosine similarity is no longer used
-  
-      const fileCache = cache.files[filePath] || { 
-        componentName: null, 
-        // embedding: null, // Commented out
-        code: '', 
-        mtime: 0 // Default to 0 if not cached
-      };
-      // const cachedEmbedding = fileCache.embedding || null; // Commented out
-      const cachedComponentName = fileCache.componentName || '';
-      const cachedMtime = fileCache.mtime || 0;
-  
-      let generatedTest;
-      // const similarityThreshold = 0.95; // Commented out
-      const hasFileChanged = currentMtime > cachedMtime; // Check if file was modified since last cached
-  
-      if (hasFileChanged || !fileCache.code || cachedComponentName !== componentName /* || cosineSimilarity(currentEmbedding, cachedEmbedding) < similarityThreshold */) {
-        console.log(`Generating new test for ${componentName} due to file change (mtime: ${currentMtime} vs cached: ${cachedMtime}), new file, or rename`);
-        const similarContext = await retrieveSimilarContext(currentCode, cache, filePath);
-        const codeGraph = await buildCodeKnowledgeGraph(filePath, code, componentName, cache);
-        const combinedGraph = mergeKnowledgeGraphs(designGraph, codeGraph, componentName);
-        const componentContext = getComponentContext(combinedGraph, componentName);
-        generatedTest = await generateComponentTest(currentCode, componentContext, componentName, similarContext, combinedGraph.baseUrl, docstring);
-        cache.files[filePath] = { 
-          componentName, 
-          // embedding: currentEmbedding, // Commented out
-          code: currentCode, 
-          mtime: currentMtime // Store current timestamp
-        };
-        cache.tests[filePath] = generatedTest;
-        if (cachedComponentName && cachedComponentName !== componentName) {
-          console.log(`Component renamed from ${cachedComponentName} to ${componentName}`);
-        }
+  const orderedFiles = determineTestOrder(componentFiles, designGraph);
+  console.log('Ordered files before processing:', orderedFiles);
+
+  await fs.mkdir(FEATURES_DIR, { recursive: true });
+
+  for (const file of orderedFiles) {
+    const filePath = path.join(COMPONENTS_DIR, file);
+    const stats = await fs.stat(filePath);
+    const currentMtime = stats.mtimeMs; // Current modification time in milliseconds
+    const code = await fs.readFile(filePath, 'utf-8');
+    const componentName = path.basename(filePath, path.extname(filePath));
+    const currentCode = await extractComponentCode(code, componentName);
+    const docstring = await extractDocstring(code, componentName);
+
+    // Generate embedding for current code (for logging purposes)
+    const currentEmbedding = currentCode.trim() ? await generateEmbedding(currentCode) : null; // Null if code is empty
+
+    const fileCache = cache.files[filePath] || { 
+      componentName: null, 
+      embedding: null, 
+      code: '', 
+      mtime: 0 
+    };
+    const cachedEmbedding = fileCache.embedding || null;
+    const cachedComponentName = fileCache.componentName || '';
+    const cachedMtime = fileCache.mtime || 0;
+    const cachedCode = fileCache.code || '';
+
+    // Log cosine similarity with safeguards
+    if (currentEmbedding && cachedEmbedding) {
+      const isValidVector = (vec) => vec && vec.length > 0 && vec.some(v => v !== 0); // Check non-zero vector
+      if (isValidVector(currentEmbedding) && isValidVector(cachedEmbedding)) {
+        const similarity = cosineSimilarity(currentEmbedding, cachedEmbedding);
+        console.log(`Cosine similarity for ${componentName}: ${similarity}`);
       } else {
-        console.log(`Using cached test for ${componentName} (no changes since mtime: ${cachedMtime})`);
-        generatedTest = cache.tests[filePath];
+        console.log(`Cosine similarity for ${componentName}: Invalid - one or both embeddings are zero vectors`);
       }
-  
-      if (!generatedTest || typeof generatedTest !== 'string' || generatedTest.trim() === '') {
-        throw new Error(`Generated test for ${componentName} is invalid or empty`);
-      }
-  
-      const featureFiles = splitGherkinIntoFeatures(generatedTest, componentName);
-      for (const { fileName, content } of featureFiles) {
-        const featureFilePath = path.join(FEATURES_DIR, fileName);
-        await fs.writeFile(featureFilePath, content);
-        console.log(`Generated BDD test saved at ${featureFilePath}`);
-      }
+    } else {
+      console.log(`Cosine similarity for ${componentName}: Not computed - ${!currentEmbedding ? 'current' : 'cached'} embedding missing`);
     }
-  
-    await saveCache(cache);
+
+    let generatedTest;
+    const hasFileChanged = currentMtime > cachedMtime; // Timestamp check
+    const hasCodeChanged = currentCode !== cachedCode; // Simple string comparison for code change
+
+    if (hasFileChanged && (hasCodeChanged || !fileCache.code || cachedComponentName !== componentName)) {
+      console.log(`Generating new test for ${componentName} due to:`);
+      if (hasFileChanged) console.log(`- File change (mtime: ${currentMtime} vs cached: ${cachedMtime})`);
+      if (hasCodeChanged) console.log(`- Code content change`);
+      if (!fileCache.code) console.log(`- New file`);
+      if (cachedComponentName !== componentName) console.log(`- Rename from ${cachedComponentName} to ${componentName}`);
+
+      // Remove old feature files for this component
+      const existingFeatureFiles = (await fs.readdir(FEATURES_DIR))
+        .filter(f => f.startsWith(`${componentName.toLowerCase()}-`) && f.endsWith('.feature'));
+      for (const oldFile of existingFeatureFiles) {
+        const oldFilePath = path.join(FEATURES_DIR, oldFile);
+        await fs.unlink(oldFilePath);
+        console.log(`Removed old feature file: ${oldFilePath}`);
+      }
+
+      const similarContext = null; // Commented out retrieveSimilarContext
+      const codeGraph = await buildCodeKnowledgeGraph(filePath, code, componentName, cache);
+      const combinedGraph = mergeKnowledgeGraphs(designGraph, codeGraph, componentName);
+      const componentContext = getComponentContext(combinedGraph, componentName);
+      generatedTest = await generateComponentTest(currentCode, componentContext, componentName, similarContext, combinedGraph.baseUrl, docstring);
+      cache.files[filePath] = { 
+        componentName, 
+        embedding: currentEmbedding, 
+        code: currentCode, 
+        mtime: currentMtime 
+      };
+      cache.tests[filePath] = generatedTest;
+    } else {
+      console.log(`Using cached test for ${componentName} (no significant code changes or timestamp unchanged: mtime ${cachedMtime})`);
+      generatedTest = cache.tests[filePath];
+    }
+
+    if (!generatedTest || typeof generatedTest !== 'string' || generatedTest.trim() === '') {
+      throw new Error(`Generated test for ${componentName} is invalid or empty`);
+    }
+
+    const featureFiles = splitGherkinIntoFeatures(generatedTest, componentName);
+    for (const { fileName, content } of featureFiles) {
+      const featureFilePath = path.join(FEATURES_DIR, fileName);
+      await fs.writeFile(featureFilePath, content);
+      console.log(`Generated BDD test saved at ${featureFilePath}`);
+    }
   }
+
+  await saveCache(cache);
+}
 
 // Main function to generate tests
 async function generateTests() {
