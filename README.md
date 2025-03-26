@@ -80,7 +80,7 @@ Our context-aware testing system, powered by Generative AI, transforms financial
 
 ---
 
-## How We Built it
+## :🛠️: How We Built it
 Our architecture integrates multiple components for seamless operation:
 
 - **Knowledge Graph**: Stores codebase relationships.
