@@ -66,7 +66,15 @@ async def run_test(bdd_script):
             async with session.post(api_url, json=payload) as response:
                 if response.status == 200:
                     result = await response.json()  # Assuming the API returns JSON
-                    updates_list.append(f"✅ API call succeeded: {result}")
+                    scenario = result.get("scenario", "Unknown Scenario")
+                    status = result.get("status", "").lower()
+                    message = result.get("message", "").lower()
+                    if status == "pass":
+                        updates_list.append(f"✅ {scenario}: Passed")
+                    else:
+                        updates_list.append(f"❌ {scenario}: Failed")
+                    updates_list.append(f"message: {message}")
+
                 else:
                     updates_list.append(f"❌ API call failed with status {response.status}")
     except Exception as e:
@@ -79,9 +87,13 @@ def execute_tests(directory_path,design_path,additional_message):
     async def run_all_tests():
         updates_list.append(f"Generating bdd...")
         tests_folder_path=execute_js_script("bdd_generator/generate-bdd.js", components=directory_path,design=design_path,additional_info=additional_message)
-        return
+        time.sleep(7)
+        tests_folder_path="C:\\Users\\YASH\\Desktop\\Hackathon\\knowledgegraph\\tests\\features"
+        print(f"tests_folder_path {tests_folder_path}")
         for root, _, files in os.walk(tests_folder_path):
             for file in files:
+                if "login" not in str(file):
+                    continue
                 file_path = os.path.join(root, file)
                 bdd = process_file(file_path)
                 updates_list.append(f"📄 Running... {file}")

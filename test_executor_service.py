@@ -2,6 +2,7 @@ import json
 from flask import Flask, request, jsonify
 import asyncio
 from Agents.TestExecutorAgent.test_execution_agent import AITestAutomationAgent
+import os
 
 app = Flask(__name__)
 
@@ -19,6 +20,13 @@ async def run_test(bdd_script):
     except Exception as e:
         await agent.executor.close()
         raise Exception(f"Test failed {e}")
+    
+
+def get_latest_file(directory):
+    files = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    if not files:
+        return None
+    return max(files, key=os.path.getmtime)  # Get the most recently modified file
 
 @app.route("/run-test", methods=["POST"])
 def run_test_route():
@@ -30,7 +38,7 @@ def run_test_route():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(run_test(bdd_script))
-        return jsonify(json.loads(open("test_results/status.json").read()))
+        return jsonify(json.loads(open(get_latest_file("test_results")).read()))
     except Exception as e:
         return jsonify({"status": "FAIL","message": str(e)})
 

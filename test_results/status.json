@@ -1,5 +1,7 @@
 {
-    "scenario": "Successful login with valid credentials",
+    "scenario": "Login with missing password",
+    "message": "Login failed with missing password",
+    "status": "pass",
     "steps": [
         {
             "action": "navigate",
@@ -10,26 +12,26 @@
         {
             "action": "input_text",
             "params": {
-                "selector": ".form-control[type='text']",
+                "selector": "#username",
                 "text": "user"
             }
         },
         {
             "action": "input_text",
             "params": {
-                "selector": ".form-control[type='password']",
-                "text": "pass"
+                "selector": "#password",
+                "text": ""
             }
         },
         {
             "action": "click",
             "params": {
-                "selector": ".btn.btn-primary"
+                "selector": ".btn"
             }
         },
         {
-            "action": "geturl",
-            "expected": "http://localhost:3000/dashboard"
+            "action": "get_dom_texts_func",
+            "params": {}
         }
     ]
 }

@@ -1,7 +1,7 @@
 Feature: Signup
 
 
-  Scenario: Successful signup with valid credentials
+  Scenario: Successful signup with valid credentials after minor design changes
     Given I am on the signup page at http://localhost:3000/signup
     And I enter "user" into the username field
     And I enter "pass" into the password field

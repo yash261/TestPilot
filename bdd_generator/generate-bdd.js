@@ -1,4 +1,6 @@
 // test-generator/generate-tests.js
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 const fs = require('fs').promises;
 const path = require('path');
 const { parse } = require('@babel/parser');
@@ -6,6 +8,7 @@ const traverse = require('@babel/traverse').default;
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { pipeline } = require('@xenova/transformers');
 const dotenv = require('dotenv');
+import { fileURLToPath } from 'url';
 const pdfParse = require('pdf-parse');
 const minimist = require('minimist');
 
@@ -21,6 +24,9 @@ if (!process.env.GOOGLE_API_KEY) {
 
 // Parse command-line arguments
 // Parse command-line arguments
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const args = minimist(process.argv.slice(2));
 const COMPONENTS_DIR = args.components ? path.resolve(args.components) : path.resolve(__dirname, '../frontend/src/components');
 const DESIGN_PDF_PATH = args.design ? path.resolve(args.design) : null; // Allow null if not provided

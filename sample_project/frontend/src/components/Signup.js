@@ -11,7 +11,7 @@ function Signup() {
   const handleSignup = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://192.168.0.103:8080/api/signup', { username, password });
+      const response = await axios.post('http://localhost:8080/api/signup', { username, password });
       localStorage.setItem('user', JSON.stringify(response.data));
       navigate('/dashboard');
     } catch (err) {

@@ -29,7 +29,7 @@ def report_test_result(output: str) -> str:
 
         # Generate a unique filename based on timestamp
         scenario = scenario.strip().replace(" ", "_")
-        filename = f"test_results/status.json"
+        filename = f"test_results/{scenario}.json"
 
         # Save the result data to a JSON file
         with open(filename, "w") as f:
