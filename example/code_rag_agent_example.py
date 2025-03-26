@@ -12,7 +12,7 @@ async def main():
     await service.run_inference()
 
     knowledge_agent = CodeRagAgent()
-    response = knowledge_agent.run("Explain main.java file and give me the code")
+    response = knowledge_agent.run("Write some unit test BankingService.java class and give me the code and save it in file with some name at ./response")
     print(response)
 
 asyncio.run(main())
