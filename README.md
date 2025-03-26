@@ -1,7 +1,7 @@
 ﻿
 ---
 
-# Context-Aware Testing System for Financial Ecosystems
+# 🖥️ Context-Aware Testing System for Financial Ecosystems
 
 Welcome to the **Context-Aware Testing System**, a revolutionary approach to testing in the fast-evolving financial ecosystem. This project leverages Generative AI to dynamically generate and adapt test scenarios, focusing on end-to-end functional testing for financial systems. Developed by Chirag Garg, Dhruv Kumar, Mohitpal Singh, and Yash Goel.
 
@@ -18,7 +18,7 @@ Welcome to the **Context-Aware Testing System**, a revolutionary approach to tes
 
 ---
 
-## Introduction
+## 🧐 Introduction
 In the complex world of financial ecosystems, robust testing is both critical and challenging. Our context-aware testing system redefines this process by:
 - Understanding the codebase dynamically.
 - Leveraging existing test cases.
@@ -28,12 +28,12 @@ While supporting API and unit testing, our primary focus is on **end-to-end func
 
 ---
 
-## Demo
+## 📺 Demo
 To be added
 
 ---
 
-## Inspiration
+## 💡 Inspiration
 Financial ecosystems feature interconnected systems and APIs, yet traditional testing relies on static mock tools, leading to:
 - Inefficiencies.
 - High costs.
@@ -43,7 +43,7 @@ Financial ecosystems feature interconnected systems and APIs, yet traditional te
 
 ---
 
-## What it Does
+## ⚙️ What it Does
 Our system integrates advanced AI and automation to streamline testing:
 
 1. **Dynamic Context Fetching**  
@@ -80,7 +80,7 @@ Our context-aware testing system, powered by Generative AI, transforms financial
 
 ---
 
-## :🛠️: How We Built it
+## 🛠️ How We Built it
 Our architecture integrates multiple components for seamless operation:
 
 - **Knowledge Graph**: Stores codebase relationships.
@@ -92,7 +92,7 @@ Our architecture integrates multiple components for seamless operation:
 ![Knowledge Graph & Vector Embeddings Generation](https://github.com/yash261/KnowledgeGraphForCode/blob/main/Images/Knowledge_Graph_and_Embeddings.png)
 
 
-### Workflow
+### 👷 Workflow
 1. Fetch context from code and documents.
 2. Generate BDD scenarios.
 3. Create Playwright test scripts.
@@ -102,7 +102,7 @@ Our architecture integrates multiple components for seamless operation:
 ![Architectural Workflow](https://github.com/yash261/KnowledgeGraphForCode/blob/main/Images/Workflow_Diagram.png)
 
 
-### Future Enhancements
+### ✨ Future Enhancements
 We’re planning exciting upgrades:
 - **Kafka**: Parallel testing of multiple BDD scenarios via a Kafka Queue.
 - **GitHub Actions**: Auto-detect new code and generate test cases.
@@ -112,14 +112,14 @@ We’re planning exciting upgrades:
 
 ---
 
-## Challenges We Faced
+## 🚧 Challenges We Faced
 - **Rate Limiting**: Even though Google provides free Gemini API, It has rate limiting enabled which hindered the amount of calls we can make to LLM for continous evaluation of the generated script.
 - **Hallucination**: Sometimes the LLM was trying to generate random output by taking refernce from random sources so we have to define the source of information and control the temprature of LLM and redefine our prompt to get more deterministic results.
 - **Creating Knowldege Graph**: Defining complex relation between function flows that goes into multiple files using Tree Sitters sometimes was unable to generate long realtionships due to Graph DB constraints.
 
 ---
 
-### How to Run
+### 🏃 How to Run
 1. Clone this repository:  
    ```bash
    git clone https://github.com/yash261/KnowledgeGraphForCode/tree/main
@@ -137,7 +137,7 @@ We’re planning exciting upgrades:
    
 ---
 
-## Tech Stack
+## 📚 Tech Stack
 1. Frontend: Streamlit
 2. Backend: Flask
 3. Database: Pinecone, Neo4j
@@ -148,7 +148,7 @@ We’re planning exciting upgrades:
 ---
 
 
-### Team
+### 👨‍🔬 Team
 - Chirag Garg - [GitHub](https://github.com/cgarg4923) | [LinkedIn](https://www.linkedin.com/in/chirag-garg-9806151a0/)
 - Dhruv Kumar - [GitHub](https://github.com/dkumar-22) | [LinkedIn](https://www.linkedin.com/in/dhruv-kumar-a160b61a9/)
 - Mohitpal Singh - [GitHub](https://github.com/mohit-0700) | [LinkedIn](https://www.linkedin.com/in/mohitpal-singh-5307751b1/)
