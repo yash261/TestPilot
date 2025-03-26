@@ -3,6 +3,7 @@ from Agents.CodeRagAgent.tools.get_code_from_knowledge_graph_tool import GetCode
 from Agents.CodeRagAgent.tools.ask_knowledge_graph_queries_tool import KnowledgeGraphQueryTool
 from langchain.agents import create_react_agent, AgentExecutor
 from langchain_google_genai import ChatGoogleGenerativeAI
+from Agents.CodeRagAgent.tools.save_response import save_response_to_file
 
 
 # Define the prompt template for the ReAct agent
@@ -45,7 +46,7 @@ class CodeRagAgent:
         self.agent_executor = self.create_knowledge_graph_agent()
 
     def create_knowledge_graph_agent(self):
-        tools = [KnowledgeGraphQueryTool,GetCodeFromNodeIdTool]
+        tools = [KnowledgeGraphQueryTool,GetCodeFromNodeIdTool,save_response_to_file]
         agent = create_react_agent(self.llm, tools, react_prompt)
         agent_executor = AgentExecutor.from_agent_and_tools(
             agent=agent,
