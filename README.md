@@ -10,11 +10,8 @@ Welcome to the **Context-Aware Testing System**, a revolutionary approach to tes
 - [Inspiration](#Inspiration)
 - [What it Does](#What-it-Does)
 - [How We Built it](#How-We-Built-it)
-- [Challenges We Faced](#Challenges-We-Faced)
 - [How to Run](#How-to-Run)
 - [Tech Stack](#Tech-Stack)
-- [Team](#Team)
-
 
 ## 🧐 Introduction
 In the complex world of financial ecosystems, robust testing is both critical and challenging. Our context-aware testing system redefines this process by:
