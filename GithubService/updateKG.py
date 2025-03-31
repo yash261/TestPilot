@@ -2,7 +2,7 @@ import asyncio
 from Agents.CodeRagAgent.service import InferenceService
 from dotenv import load_dotenv
 import asyncio
-from githubService import clone_github_repo
+from GithubService.githubService import clone_github_repo
 import argparse
 load_dotenv()
 

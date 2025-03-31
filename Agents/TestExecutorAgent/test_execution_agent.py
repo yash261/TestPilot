@@ -1,6 +1,7 @@
 import asyncio
 from functools import wraps
 import os
+import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.tools import StructuredTool
 from langchain.agents import initialize_agent, AgentType
@@ -226,6 +227,7 @@ class AITestAutomationAgent:
         """
         @wraps(async_func)
         def wrapper(*args, **kwargs):
+            time.sleep(1)
             try:
                 # Try to get the current event loop
                 loop = asyncio.get_event_loop()
@@ -247,6 +249,8 @@ class AITestAutomationAgent:
         return {"messages": [self.llm_with_tools.invoke([SystemMessage(content=system_prompt)] + state["messages"])]}
     
     async def create_graph(self):
+
+        time.sleep(1)
 
         # Graph
         builder = StateGraph(MessagesState)

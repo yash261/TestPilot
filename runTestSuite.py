@@ -72,6 +72,7 @@ class TestSuiteExecutor:
             Dict with execution status and message
         """
         try:
+            time.sleep(1)
             action = step.get('action')
             params = step.get('params', {})
 
@@ -127,7 +128,7 @@ class TestSuiteExecutor:
                 "message": f"Error executing step {action} with params: {params}: {str(e)}"
             }
 
-    async def run_all_tests_in_directory(self, directory: str = "test_results"):
+    async def run_all_tests_in_directory(self, directory: str = "C:\\Users\\YASH\\Desktop\\Hackathon\\test_results"):
         """
         Run all test JSON files in a specified directory.
 
@@ -152,7 +153,7 @@ class TestSuiteExecutor:
         # Execute tests sequentially
         overall_results = []
         for json_file in json_files:
-            print(f"Executing test from: {json_file}")
+            # print(f"Executing test from: {json_file}")
             test_result = await self.execute_test_from_json(json_file)
             overall_results.append(test_result)
             print(f"Test Result: {test_result['status']}")

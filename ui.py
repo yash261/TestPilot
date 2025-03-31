@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import threading
 import os
-from githubService import detect_and_fetch_repo
+from GithubService.githubService import detect_and_fetch_repo
 import asyncio
 from Agents.TestExecutorAgent.test_execution_agent import AITestAutomationAgent
 import aiohttp
@@ -92,7 +92,7 @@ def execute_tests(directory_path,design_path,additional_message):
         print(f"tests_folder_path {tests_folder_path}")
         for root, _, files in os.walk(tests_folder_path):
             for file in files:
-                if "login" not in str(file):
+                if "signup" in str(file):
                     continue
                 file_path = os.path.join(root, file)
                 bdd = process_file(file_path)
